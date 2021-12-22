@@ -1,11 +1,11 @@
 use crate::traits::*;
 
 impl ReadFromPacket<'_> for bool {
-    fn read_from(packet: &[u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
         match u32::read_from(packet, offset)? {
             BOOL_TRUE => Ok(true),
             BOOL_FALSE => Ok(false),
-            _ => Err(PacketContentsError::UnknownConstructor),
+            _ => Err(TlError::UnknownConstructor),
         }
     }
 }
@@ -27,9 +27,9 @@ macro_rules! impl_read_from_packet(
     ($ty:ty) => {
         impl ReadFromPacket<'_> for $ty {
             #[inline(always)]
-            fn read_from(packet: &[u8], offset: &mut usize) -> PacketContentsResult<Self> {
+            fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
                 if packet.len() < *offset + std::mem::size_of::<$ty>() {
-                    Err(PacketContentsError::UnexpectedEof)
+                    Err(TlError::UnexpectedEof)
                 } else {
                     let value = <$ty>::from_le_bytes(unsafe {
                         *(packet.as_ptr().add(*offset) as *const [u8; std::mem::size_of::<$ty>()])

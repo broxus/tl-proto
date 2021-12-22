@@ -8,7 +8,7 @@ macro_rules! impl_traits_for_tuple {
             $($ty: ReadFromPacket<'a>),*
         {
             #[inline(always)]
-            fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+            fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
                 Ok(($($ty::read_from(packet, offset)?),*,))
             }
         }

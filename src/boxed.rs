@@ -57,11 +57,11 @@ impl<'a, T> ReadFromPacket<'a> for BoxedWrapper<T>
 where
     T: BoxedConstructor + ReadFromPacket<'a>,
 {
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         if u32::read_from(packet, offset)? == T::ID {
             T::read_from(packet, offset).map(BoxedWrapper)
         } else {
-            Err(PacketContentsError::UnknownConstructor)
+            Err(TlError::UnknownConstructor)
         }
     }
 }

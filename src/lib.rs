@@ -10,12 +10,11 @@ mod seq;
 mod traits;
 mod tuple;
 
-pub fn deserialize<'a, T>(packet: &'a [u8]) -> PacketContentsResult<T>
+pub fn deserialize<'a, T>(packet: &'a [u8]) -> TlResult<T>
 where
     T: ReadFromPacket<'a>,
 {
-    let mut offset = 0;
-    T::read_from(packet, &mut offset)
+    T::read_from(packet, &mut 0)
 }
 
 pub fn serialize<T>(data: T) -> Vec<u8>

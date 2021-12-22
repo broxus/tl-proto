@@ -1,6 +1,6 @@
 /// Specifies how this type can read from the packet
 pub trait ReadFromPacket<'a>: Sized {
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self>;
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self>;
 }
 
 /// Specifies how this type can be written to the packet
@@ -90,10 +90,10 @@ impl TlPacket for Vec<u8> {
     }
 }
 
-pub type PacketContentsResult<T> = Result<T, PacketContentsError>;
+pub type TlResult<T> = Result<T, TlError>;
 
 #[derive(thiserror::Error, Debug)]
-pub enum PacketContentsError {
+pub enum TlError {
     #[error("Unexpected packet EOF")]
     UnexpectedEof,
     #[error("Unknown constructor")]

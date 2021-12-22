@@ -5,7 +5,7 @@ use crate::traits::*;
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl<'a> ReadFromPacket<'a> for &'a [u8] {
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         read_bytes(packet, offset)
     }
 }
@@ -29,7 +29,7 @@ impl WriteToPacket for &[u8] {
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl<'a> ReadFromPacket<'a> for Vec<u8> {
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         Ok(read_bytes(packet, offset)?.to_vec())
     }
 }
@@ -53,7 +53,7 @@ impl WriteToPacket for Vec<u8> {
 /// `ton::int128 | ton::int256` - N bytes of data
 impl<'a, const N: usize> ReadFromPacket<'a> for &'a [u8; N] {
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         read_fixed_bytes(packet, offset)
     }
 }
@@ -61,7 +61,7 @@ impl<'a, const N: usize> ReadFromPacket<'a> for &'a [u8; N] {
 /// `ton::int128 | ton::int256` - N bytes of data
 impl<'a, const N: usize> ReadFromPacket<'a> for [u8; N] {
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         read_fixed_bytes(packet, offset).map(|&t| t)
     }
 }
@@ -88,7 +88,7 @@ where
     [T; N]: smallvec::Array,
     <[T; N] as smallvec::Array>::Item: ReadFromPacket<'a>,
 {
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = u32::read_from(packet, offset)? as usize;
         let mut items = SmallVec::<[T; N]>::with_capacity(len);
         for _ in 0..len {
@@ -103,7 +103,7 @@ impl<'a, T> ReadFromPacket<'a> for Vec<T>
 where
     T: ReadFromPacket<'a>,
 {
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = u32::read_from(packet, offset)? as usize;
         let mut items = Vec::with_capacity(len);
         for _ in 0..len {
@@ -172,7 +172,7 @@ impl<'a, T> ReadFromPacket<'a> for IntermediateBytes<T>
 where
     T: ReadFromPacket<'a>,
 {
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let intermediate = read_bytes(packet, offset)?;
         T::read_from(intermediate, &mut 0).map(IntermediateBytes)
     }
@@ -215,7 +215,7 @@ impl AsRef<[u8]> for RawBytes<'_> {
 }
 
 impl<'a> ReadFromPacket<'a> for RawBytes<'a> {
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = packet.len() - std::cmp::min(*offset, packet.len());
         let result = unsafe { std::slice::from_raw_parts(packet.as_ptr().add(*offset), len) };
         *offset += len;
@@ -249,7 +249,7 @@ impl AsRef<[u8]> for OwnedRawBytes {
 }
 
 impl ReadFromPacket<'_> for OwnedRawBytes {
-    fn read_from(packet: &'_ [u8], offset: &mut usize) -> PacketContentsResult<Self> {
+    fn read_from(packet: &'_ [u8], offset: &mut usize) -> TlResult<Self> {
         Ok(Self(RawBytes::read_from(packet, offset)?.0.to_vec()))
     }
 }
@@ -273,9 +273,9 @@ impl WriteToPacket for OwnedRawBytes {
 fn read_fixed_bytes<'a, const N: usize>(
     packet: &'a [u8],
     offset: &mut usize,
-) -> PacketContentsResult<&'a [u8; N]> {
+) -> TlResult<&'a [u8; N]> {
     if packet.len() < *offset + N {
-        Err(PacketContentsError::UnexpectedEof)
+        Err(TlError::UnexpectedEof)
     } else {
         let ptr = unsafe { &*(packet.as_ptr().add(*offset) as *const [u8; N]) };
         *offset += N;
@@ -332,12 +332,12 @@ where
 }
 
 #[inline(always)]
-fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<&'a [u8]> {
+fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
     let packet_len = packet.len();
     let current_offset = *offset;
 
     if packet_len <= current_offset {
-        return Err(PacketContentsError::UnexpectedEof);
+        return Err(TlError::UnexpectedEof);
     }
 
     let first_bytes = packet[current_offset];
@@ -345,7 +345,7 @@ fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<
         (first_bytes as usize, 1)
     } else {
         if packet_len < current_offset + 4 {
-            return Err(PacketContentsError::UnexpectedEof);
+            return Err(TlError::UnexpectedEof);
         }
 
         let mut len = packet[current_offset + 1] as usize;
@@ -364,7 +364,7 @@ fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> PacketContentsResult<
     };
 
     if packet_len < current_offset + have_read + len + remainder {
-        return Err(PacketContentsError::UnexpectedEof);
+        return Err(TlError::UnexpectedEof);
     }
 
     let result =
