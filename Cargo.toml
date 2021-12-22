@@ -1,0 +1,10 @@
+[package]
+name = "tl-proto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+bytemuck = "1.7"
+smallvec = { version = "1.7", features = ["union", "const_generics"] }
+thiserror = "1.0"
