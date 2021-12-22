@@ -3,6 +3,9 @@ name = "tl-proto"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = ["proc"]
+
 [dependencies]
 anyhow = "1.0"
 bytemuck = "1.7"
