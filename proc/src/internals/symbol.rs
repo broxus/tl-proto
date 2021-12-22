@@ -1,9 +1,9 @@
 pub const TL: Symbol = Symbol("tl");
-pub const ID: Symbol = Symbol("id");
-pub const FLAGS: Symbol = Symbol("flags");
-pub const WHEN: Symbol = Symbol("when");
-pub const SIZE_HINT: Symbol = Symbol("size_hint");
 pub const BOXED: Symbol = Symbol("boxed");
+pub const ID: Symbol = Symbol("id");
+pub const SIZE_HINT: Symbol = Symbol("size_hint");
+pub const FLAGS: Symbol = Symbol("flags");
+pub const FLAGS_BIT: Symbol = Symbol("flags_bit");
 
 #[derive(Copy, Clone)]
 pub struct Symbol(&'static str);

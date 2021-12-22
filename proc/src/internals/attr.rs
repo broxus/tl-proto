@@ -7,9 +7,9 @@ use super::ctxt::*;
 use super::symbol::*;
 
 pub struct Container {
-    boxed: bool,
-    id: Option<syn::LitInt>,
-    size_hint: Option<SizeHintType>,
+    pub boxed: bool,
+    pub id: Option<syn::LitInt>,
+    pub size_hint: Option<SizeHintType>,
 }
 
 impl Container {
@@ -62,6 +62,119 @@ impl Container {
             boxed: boxed.get(),
             id: id.get(),
             size_hint: size_hint.get(),
+        }
+    }
+}
+
+pub struct Variant {
+    pub id: Option<syn::LitInt>,
+    pub size_hint: Option<SizeHintType>,
+}
+
+impl Variant {
+    pub fn from_ast(cx: &Ctxt, item: &syn::DeriveInput) -> Self {
+        let mut id = Attr::none(cx, ID);
+        let mut size_hint = Attr::none(cx, SIZE_HINT);
+
+        for meta_item in item
+            .attrs
+            .iter()
+            .flat_map(|attr| get_meta_items(cx, attr))
+            .flatten()
+        {
+            match &meta_item {
+                // Parse `#[tl(id = 0x123456)]`
+                Meta(NameValue(m)) if m.path == ID => {
+                    if let Ok(n) = get_lit_number(cx, ID, &m.lit) {
+                        id.set(&m.path, n.value());
+                    }
+                }
+                // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
+                Meta(NameValue(m)) if m.path == SIZE_HINT => {
+                    if let Ok(h) = get_size_hint(cx, SIZE_HINT, &m.lit) {
+                        size_hint.set(&m.path, h);
+                    }
+                }
+                Meta(meta_item) => {
+                    let path = meta_item
+                        .path()
+                        .into_token_stream()
+                        .to_string()
+                        .replace(' ', "");
+                    cx.error_spanned_by(
+                        meta_item.path(),
+                        format!("unknown tl container attribute `{}`", path),
+                    );
+                }
+                Lit(lit) => {
+                    cx.error_spanned_by(lit, "unexpected literal in tl container attribute");
+                }
+            }
+        }
+
+        Self {
+            id: id.get(),
+            size_hint: size_hint.get(),
+        }
+    }
+}
+
+pub struct Field {
+    pub size_hint: Option<SizeHintType>,
+    pub flags: bool,
+    pub flags_bit: Option<u8>,
+}
+
+impl Field {
+    pub fn from_ast(cx: &Ctxt, item: &syn::DeriveInput) -> Self {
+        let mut size_hint = Attr::none(cx, SIZE_HINT);
+        let mut flags = BoolAttr::none(cx, FLAGS);
+        let mut flags_bit = Attr::none(cx, FLAGS_BIT);
+
+        for meta_item in item
+            .attrs
+            .iter()
+            .flat_map(|attr| get_meta_items(cx, attr))
+            .flatten()
+        {
+            match &meta_item {
+                // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
+                Meta(NameValue(m)) if m.path == SIZE_HINT => {
+                    if let Ok(h) = get_size_hint(cx, SIZE_HINT, &m.lit) {
+                        size_hint.set(&m.path, h);
+                    }
+                }
+                // Parse `#[tl(flags)]`
+                Meta(Path(word)) if word == FLAGS => {
+                    flags.set_true(word);
+                }
+                // Parse `#[tl(flags_bit = 0x123456)]`
+                Meta(NameValue(m)) if m.path == FLAGS_BIT => {
+                    if let Ok(n) = get_lit_number(cx, FLAGS_BIT, &m.lit) {
+                        flags_bit.set(&m.path, n.value());
+                    }
+                }
+                Meta(meta_item) => {
+                    let path = meta_item
+                        .path()
+                        .into_token_stream()
+                        .to_string()
+                        .replace(' ', "");
+                    cx.error_spanned_by(
+                        meta_item.path(),
+                        format!("unknown tl container attribute `{}`", path),
+                    );
+                }
+                Lit(lit) => {
+                    cx.error_spanned_by(lit, "unexpected literal in tl container attribute");
+                }
+            }
+        }
+
+        Self {
+            size_hint: size_hint.get(),
+            flags: flags.get(),
+            flags_bit: flags_bit.get(),
         }
     }
 }
