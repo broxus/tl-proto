@@ -1,5 +1,6 @@
 use proc_macro::TokenStream;
 
+mod bound;
 mod internals;
 
 #[proc_macro_derive(ReadFromPacket, attribute(tl))]

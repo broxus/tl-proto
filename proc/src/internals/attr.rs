@@ -72,7 +72,7 @@ pub struct Variant {
 }
 
 impl Variant {
-    pub fn from_ast(cx: &Ctxt, item: &syn::DeriveInput) -> Self {
+    pub fn from_ast(cx: &Ctxt, item: &syn::Variant) -> Self {
         let mut id = Attr::none(cx, ID);
         let mut size_hint = Attr::none(cx, SIZE_HINT);
 
@@ -126,12 +126,12 @@ pub struct Field {
 }
 
 impl Field {
-    pub fn from_ast(cx: &Ctxt, item: &syn::DeriveInput) -> Self {
+    pub fn from_ast(cx: &Ctxt, field: &syn::Field) -> Self {
         let mut size_hint = Attr::none(cx, SIZE_HINT);
         let mut flags = BoolAttr::none(cx, FLAGS);
         let mut flags_bit = Attr::none(cx, FLAGS_BIT);
 
-        for meta_item in item
+        for meta_item in field
             .attrs
             .iter()
             .flat_map(|attr| get_meta_items(cx, attr))
