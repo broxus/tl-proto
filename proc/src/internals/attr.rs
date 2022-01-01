@@ -9,7 +9,7 @@ use super::symbol::*;
 pub struct Container {
     pub boxed: bool,
     pub id: Option<u32>,
-    pub size_hint: Option<SizeHintType>,
+    pub size_hint: Option<SizeHint>,
 }
 
 impl Container {
@@ -68,7 +68,7 @@ impl Container {
 
 pub struct Variant {
     pub id: Option<u32>,
-    pub size_hint: Option<SizeHintType>,
+    pub size_hint: Option<SizeHint>,
 }
 
 impl Variant {
@@ -120,7 +120,7 @@ impl Variant {
 }
 
 pub struct Field {
-    pub size_hint: Option<SizeHintType>,
+    pub size_hint: Option<SizeHint>,
     pub flags: bool,
     pub flags_bit: Option<u8>,
     pub skip_write: bool,
@@ -201,22 +201,22 @@ impl Field {
     }
 }
 
-pub enum SizeHintType {
+pub enum SizeHint {
     Explicit { value: usize },
     Expression { expr: syn::Expr },
 }
 
-fn get_size_hint(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<SizeHintType, ()> {
+fn get_size_hint(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<SizeHint, ()> {
     match lit {
         syn::Lit::Int(literal) => match literal.base10_parse::<usize>() {
-            Ok(value) => Ok(SizeHintType::Explicit { value }),
+            Ok(value) => Ok(SizeHint::Explicit { value }),
             Err(e) => {
                 cx.syn_error(e);
                 Err(())
             }
         },
         syn::Lit::Str(expr) => match expr.parse::<syn::Expr>() {
-            Ok(expr) => Ok(SizeHintType::Expression { expr }),
+            Ok(expr) => Ok(SizeHint::Expression { expr }),
             Err(e) => {
                 cx.syn_error(e);
                 Err(())

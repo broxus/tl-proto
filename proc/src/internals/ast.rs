@@ -63,9 +63,6 @@ fn enum_from_ast<'a>(
 fn struct_from_ast<'a>(cx: &Ctxt, fields: &'a syn::Fields) -> (Style, Vec<Field<'a>>) {
     match fields {
         syn::Fields::Named(fields) => (Style::Struct, fields_from_ast(cx, &fields.named)),
-        syn::Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
-            (Style::Newtype, fields_from_ast(cx, &fields.unnamed))
-        }
         syn::Fields::Unnamed(fields) => (Style::Tuple, fields_from_ast(cx, &fields.unnamed)),
         syn::Fields::Unit => (Style::Unit, Vec::new()),
     }
@@ -110,6 +107,5 @@ pub struct Field<'a> {
 pub enum Style {
     Struct,
     Tuple,
-    Newtype,
     Unit,
 }

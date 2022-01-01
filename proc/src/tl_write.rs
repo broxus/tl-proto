@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 
 use super::{bound, dummy};
 use crate::internals::{ast, attr, ctxt};
@@ -40,55 +40,64 @@ fn build_generics(container: &ast::Container) -> syn::Generics {
 
 fn build_body(container: &ast::Container) -> TokenStream {
     match &container.data {
-        ast::Data::Enum(_variants) => todo!(),
+        ast::Data::Enum(variants) => build_enum(container, variants),
         ast::Data::Struct(_, fields) => build_struct(container, fields),
     }
 }
 
-fn build_struct(container: &ast::Container, fields: &[ast::Field]) -> TokenStream {
-    let max_size_hint = if fields.is_empty() {
-        let size: usize = if container.attrs.boxed { 4 } else { 0 };
-        quote! { #size }
-    } else {
-        let tokens = match &container.attrs.size_hint {
-            Some(size_hint) => build_size_hint(size_hint),
-            None => {
-                let fields = fields
-                    .iter()
-                    .filter(|field| !field.attrs.skip_write)
-                    .map(|field| match &field.attrs.size_hint {
-                        Some(size_hint) => build_size_hint(size_hint),
-                        None => {
-                            let member = field.member.clone();
-                            quote! { self.#member.max_size_hint() }
-                        }
-                    });
-                quote! { #(#fields)+* }
-            }
-        };
-        if container.attrs.boxed {
-            quote! { 4usize + #tokens }
-        } else {
-            tokens
-        }
+fn build_enum(container: &ast::Container, variants: &[ast::Variant]) -> TokenStream {
+    let build_field = |field: &ast::Field| match &field.member {
+        syn::Member::Named(member) => quote! { #member },
+        syn::Member::Unnamed(index) => quote::format_ident!("field_{}", index).to_token_stream(),
     };
 
-    let write_to = {
-        let id = container.attrs.boxed.then(|| container.attrs.id).flatten();
-        let prefix = id
-            .map(|id: u32| quote! { _tl_proto::TlWrite::write_to::<P_>(&#id, packet); })
-            .into_iter();
+    let max_size_hint = match &container.attrs.size_hint {
+        Some(size_hint) => {
+            let size_hint = build_size_hint(size_hint);
+            if container.attrs.boxed {
+                quote! { 4usize + #size_hint }
+            } else {
+                size_hint
+            }
+        }
+        None if !variants.is_empty() => {
+            let variants = map_variants(container, variants, |destructed, variant| {
+                let body = build_max_size_hint(
+                    &variant.fields,
+                    build_field,
+                    &variant.attrs.size_hint,
+                    container.attrs.boxed,
+                );
+                quote! { #destructed => #body }
+            });
 
-        let fields = prefix.chain(fields.iter().filter(|field| !field.attrs.skip_write).map(
-            |field| {
-                let member = field.member.clone();
-                quote! { _tl_proto::TlWrite::write_to::<P_>(&self.#member, packet); }
-            },
-        ));
+            quote! {
+                match self {
+                    #(#variants),*,
+                }
+            }
+        }
+        None => quote! { 0usize },
+    };
+
+    let write_to = if !variants.is_empty() {
+        let variants = map_variants(container, variants, |destructed, variant| {
+            let body = build_write_to(
+                &variant.fields,
+                build_field,
+                container.attrs.boxed,
+                variant.attrs.id,
+            );
+            quote! { #destructed => { #body } }
+        });
 
         quote! {
-            #(#fields)*
+            match self {
+                #(#variants),*,
+            }
         }
+    } else {
+        quote! {}
     };
 
     quote! {
@@ -105,9 +114,169 @@ fn build_struct(container: &ast::Container, fields: &[ast::Field]) -> TokenStrea
     }
 }
 
-fn build_size_hint(size_hint: &attr::SizeHintType) -> TokenStream {
+fn map_variants<'a, F>(
+    container: &'a ast::Container,
+    variants: &'a [ast::Variant],
+    mut f: F,
+) -> impl Iterator<Item = TokenStream> + 'a
+where
+    F: FnMut(TokenStream, &'a ast::Variant) -> TokenStream + 'a,
+{
+    variants.iter().map(move |variant| {
+        let ident = &container.ident;
+        let variant_name = &variant.ident;
+        let destructed = match &variant.style {
+            ast::Style::Struct => {
+                let mut skip_rest = false;
+                let fields = variant
+                    .fields
+                    .iter()
+                    .filter_map(|field| {
+                        if field.attrs.skip_write {
+                            skip_rest = true;
+                            return None;
+                        }
+
+                        let ident = &field.member;
+                        Some(quote! { #ident })
+                    })
+                    .collect::<Vec<_>>();
+
+                let skip_rest = skip_rest.then(|| quote! { .. });
+
+                quote! {
+                    #ident::#variant_name {
+                        #(#fields),*,
+                        #skip_rest
+                    }
+                }
+            }
+            ast::Style::Tuple => {
+                let fields = variant.fields.iter().enumerate().map(|(i, field)| {
+                    if field.attrs.skip_write {
+                        quote! { _ }
+                    } else {
+                        quote::format_ident!("field_{}", i).to_token_stream()
+                    }
+                });
+
+                quote! {
+                    #ident::#variant_name(#(#fields),*)
+                }
+            }
+            ast::Style::Unit => quote! {
+                #ident::#variant_name
+            },
+        };
+
+        f(destructed, variant)
+    })
+}
+
+fn build_struct(container: &ast::Container, fields: &[ast::Field]) -> TokenStream {
+    let max_size_hint = build_max_size_hint(
+        fields,
+        |field: &ast::Field| {
+            let member = &field.member;
+            quote! { self.#member }
+        },
+        &container.attrs.size_hint,
+        container.attrs.boxed,
+    );
+
+    let write_to = build_write_to(
+        fields,
+        |field: &ast::Field| {
+            let member = &field.member;
+            quote! { &self.#member }
+        },
+        container.attrs.boxed,
+        container.attrs.id,
+    );
+
+    quote! {
+        fn max_size_hint(&self) -> usize {
+            #max_size_hint
+        }
+
+        fn write_to<P_>(&self, packet: &mut P_)
+        where
+            P_: _tl_proto::TlPacket
+        {
+            #write_to
+        }
+    }
+}
+
+fn build_max_size_hint<F>(
+    fields: &[ast::Field],
+    mut build_field: F,
+    size_hint: &Option<attr::SizeHint>,
+    boxed: bool,
+) -> TokenStream
+where
+    F: FnMut(&ast::Field) -> TokenStream,
+{
+    if fields.is_empty() {
+        let size: usize = if boxed { 4 } else { 0 };
+        quote! { #size }
+    } else {
+        let tokens = match &size_hint {
+            Some(size_hint) => build_size_hint(size_hint),
+            None => {
+                let fields = fields
+                    .iter()
+                    .filter(|field| !field.attrs.skip_write)
+                    .map(|field| match &field.attrs.size_hint {
+                        Some(size_hint) => build_size_hint(size_hint),
+                        None => {
+                            let field = build_field(field);
+                            quote! { #field.max_size_hint() }
+                        }
+                    });
+                quote! { #(#fields)+* }
+            }
+        };
+        if boxed {
+            quote! { 4usize + #tokens }
+        } else {
+            tokens
+        }
+    }
+}
+
+fn build_write_to<F>(
+    fields: &[ast::Field],
+    mut build_field: F,
+    boxed: bool,
+    id: Option<u32>,
+) -> TokenStream
+where
+    F: FnMut(&ast::Field) -> TokenStream,
+{
+    let id = boxed.then(|| id).flatten();
+    let prefix = id
+        .map(|id: u32| quote! { _tl_proto::TlWrite::write_to::<P_>(&#id, packet); })
+        .into_iter();
+
+    let fields = prefix.chain(
+        fields
+            .iter()
+            .filter(|field| !field.attrs.skip_write)
+            .map(|field| {
+                let field = build_field(field);
+                quote! { _tl_proto::TlWrite::write_to::<P_>(#field, packet); }
+            }),
+    );
+
+    quote! {
+        #(#fields)*
+    }
+}
+
+fn build_size_hint(size_hint: &attr::SizeHint) -> TokenStream {
     match size_hint {
-        attr::SizeHintType::Explicit { value } => quote! { #value },
-        attr::SizeHintType::Expression { expr } => quote! { #expr },
+        attr::SizeHint::Explicit { value } => quote! { #value },
+        attr::SizeHint::Expression { expr } => quote! { #expr },
     }
 }
