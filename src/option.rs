@@ -1,9 +1,9 @@
 use crate::traits::*;
 
 /// Skips serialization if `None`, serializes as `T` otherwise
-impl<T> WriteToPacket for Option<T>
+impl<T> TlWrite for Option<T>
 where
-    T: WriteToPacket,
+    T: TlWrite,
 {
     fn max_size_hint(&self) -> usize {
         if let Some(item) = self {

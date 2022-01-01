@@ -8,7 +8,7 @@ use super::symbol::*;
 
 pub struct Container {
     pub boxed: bool,
-    pub id: Option<syn::LitInt>,
+    pub id: Option<u32>,
     pub size_hint: Option<SizeHintType>,
 }
 
@@ -32,7 +32,7 @@ impl Container {
                 // Parse `#[tl(id = 0x123456)]`
                 Meta(NameValue(m)) if m.path == ID => {
                     if let Ok(n) = get_lit_number(cx, ID, &m.lit) {
-                        id.set(&m.path, n.value());
+                        id.set(&m.path, n);
                     }
                 }
                 // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
@@ -67,7 +67,7 @@ impl Container {
 }
 
 pub struct Variant {
-    pub id: Option<syn::LitInt>,
+    pub id: Option<u32>,
     pub size_hint: Option<SizeHintType>,
 }
 
@@ -86,7 +86,7 @@ impl Variant {
                 // Parse `#[tl(id = 0x123456)]`
                 Meta(NameValue(m)) if m.path == ID => {
                     if let Ok(n) = get_lit_number(cx, ID, &m.lit) {
-                        id.set(&m.path, n.value());
+                        id.set(&m.path, n);
                     }
                 }
                 // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
@@ -123,6 +123,9 @@ pub struct Field {
     pub size_hint: Option<SizeHintType>,
     pub flags: bool,
     pub flags_bit: Option<u8>,
+    pub skip_write: bool,
+    pub skip_read: bool,
+    pub skip_hash: bool,
 }
 
 impl Field {
@@ -130,6 +133,9 @@ impl Field {
         let mut size_hint = Attr::none(cx, SIZE_HINT);
         let mut flags = BoolAttr::none(cx, FLAGS);
         let mut flags_bit = Attr::none(cx, FLAGS_BIT);
+        let mut skip_write = BoolAttr::none(cx, SKIP_WRITE);
+        let mut skip_read = BoolAttr::none(cx, SKIP_READ);
+        let mut skip_hash = BoolAttr::none(cx, SKIP_HASH);
 
         for meta_item in field
             .attrs
@@ -151,9 +157,22 @@ impl Field {
                 // Parse `#[tl(flags_bit = 0x123456)]`
                 Meta(NameValue(m)) if m.path == FLAGS_BIT => {
                     if let Ok(n) = get_lit_number(cx, FLAGS_BIT, &m.lit) {
-                        flags_bit.set(&m.path, n.value());
+                        flags_bit.set(&m.path, n);
                     }
                 }
+                // Parse `#[tl(skip_write)]`
+                Meta(Path(word)) if word == SKIP_WRITE => {
+                    skip_write.set_true(word);
+                }
+                // Parse `#[tl(skip_read)]`
+                Meta(Path(word)) if word == SKIP_READ => {
+                    skip_read.set_true(word);
+                }
+                // Parse `#[tl(skip_hash)]`
+                Meta(Path(word)) if word == SKIP_HASH => {
+                    skip_hash.set_true(word);
+                }
+                // Other
                 Meta(meta_item) => {
                     let path = meta_item
                         .path()
@@ -175,6 +194,9 @@ impl Field {
             size_hint: size_hint.get(),
             flags: flags.get(),
             flags_bit: flags_bit.get(),
+            skip_write: skip_write.get(),
+            skip_read: skip_read.get(),
+            skip_hash: skip_hash.get(),
         }
     }
 }
@@ -214,13 +236,13 @@ fn get_size_hint(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<SizeHin
     }
 }
 
-fn get_lit_number<'a>(
-    cx: &Ctxt,
-    attr_name: Symbol,
-    lit: &'a syn::Lit,
-) -> Result<&'a syn::LitInt, ()> {
+fn get_lit_number<T>(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<T, ()>
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
     if let syn::Lit::Int(lit) = lit {
-        Ok(lit)
+        lit.base10_parse().map_err(|err| cx.syn_error(err))
     } else {
         cx.error_spanned_by(
             lit,
@@ -287,7 +309,7 @@ impl<'c, T> Attr<'c, T> {
         }
     }
 
-    fn set<O, T>(&mut self, object: O, value: T)
+    fn set<O>(&mut self, object: O, value: T)
     where
         O: ToTokens,
     {
@@ -302,7 +324,8 @@ impl<'c, T> Attr<'c, T> {
         }
     }
 
-    fn set_opt<O, T>(&mut self, object: O, value: Option<T>)
+    #[allow(unused)]
+    fn set_opt<O>(&mut self, object: O, value: Option<T>)
     where
         O: ToTokens,
     {
@@ -311,6 +334,7 @@ impl<'c, T> Attr<'c, T> {
         }
     }
 
+    #[allow(unused)]
     fn set_if_none(&mut self, value: T) {
         if self.value.is_none() {
             self.value = Some(value);
@@ -321,6 +345,7 @@ impl<'c, T> Attr<'c, T> {
         self.value
     }
 
+    #[allow(unused)]
     fn get_with_tokens(self) -> Option<(TokenStream, T)> {
         match self.value {
             Some(value) => Some((self.tokens, value)),

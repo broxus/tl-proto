@@ -1,10 +1,10 @@
 /// Specifies how this type can read from the packet
-pub trait ReadFromPacket<'a>: Sized {
+pub trait TlRead<'a>: Sized {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self>;
 }
 
 /// Specifies how this type can be written to the packet
-pub trait WriteToPacket {
+pub trait TlWrite {
     /// Max required number of bytes
     fn max_size_hint(&self) -> usize;
 
@@ -13,32 +13,32 @@ pub trait WriteToPacket {
         P: TlPacket;
 }
 
-impl<T> WriteToPacket for &T
+impl<T> TlWrite for &T
 where
-    T: WriteToPacket,
+    T: TlWrite,
 {
     fn max_size_hint(&self) -> usize {
-        WriteToPacket::max_size_hint(*self)
+        TlWrite::max_size_hint(*self)
     }
 
     fn write_to<P>(&self, packet: &mut P)
     where
         P: TlPacket,
     {
-        WriteToPacket::write_to(*self, packet)
+        TlWrite::write_to(*self, packet)
     }
 }
 
 /// Trait for types which can be signed. Used to overwrite serialization for signer
-pub trait UpdateSignatureHasher {
+pub trait TlHash {
     fn update_hasher<H>(&self, hasher: &mut H)
     where
         H: TlPacket;
 }
 
-impl<T> UpdateSignatureHasher for &T
+impl<T> TlHash for &T
 where
-    T: UpdateSignatureHasher,
+    T: TlHash,
 {
     fn update_hasher<H>(&self, hasher: &mut H)
     where

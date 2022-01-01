@@ -1,6 +1,6 @@
 use crate::traits::*;
 
-impl ReadFromPacket<'_> for bool {
+impl TlRead<'_> for bool {
     fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
         match u32::read_from(packet, offset)? {
             BOOL_TRUE => Ok(true),
@@ -10,7 +10,7 @@ impl ReadFromPacket<'_> for bool {
     }
 }
 
-impl WriteToPacket for bool {
+impl TlWrite for bool {
     fn max_size_hint(&self) -> usize {
         std::mem::size_of::<u32>()
     }
@@ -25,7 +25,7 @@ impl WriteToPacket for bool {
 
 macro_rules! impl_read_from_packet(
     ($ty:ty) => {
-        impl ReadFromPacket<'_> for $ty {
+        impl TlRead<'_> for $ty {
             #[inline(always)]
             fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
                 if packet.len() < *offset + std::mem::size_of::<$ty>() {
@@ -44,7 +44,7 @@ macro_rules! impl_read_from_packet(
 
 impl_read_from_packet!(u32);
 
-impl WriteToPacket for u32 {
+impl TlWrite for u32 {
     fn max_size_hint(&self) -> usize {
         std::mem::size_of::<Self>()
     }
@@ -59,7 +59,7 @@ impl WriteToPacket for u32 {
 
 impl_read_from_packet!(i32);
 
-impl WriteToPacket for i32 {
+impl TlWrite for i32 {
     fn max_size_hint(&self) -> usize {
         std::mem::size_of::<Self>()
     }
@@ -74,7 +74,7 @@ impl WriteToPacket for i32 {
 
 impl_read_from_packet!(u64);
 
-impl WriteToPacket for u64 {
+impl TlWrite for u64 {
     fn max_size_hint(&self) -> usize {
         std::mem::size_of::<Self>()
     }
@@ -89,7 +89,7 @@ impl WriteToPacket for u64 {
 
 impl_read_from_packet!(i64);
 
-impl WriteToPacket for i64 {
+impl TlWrite for i64 {
     fn max_size_hint(&self) -> usize {
         std::mem::size_of::<Self>()
     }
@@ -104,7 +104,7 @@ impl WriteToPacket for i64 {
 
 impl_read_from_packet!(f64);
 
-impl WriteToPacket for f64 {
+impl TlWrite for f64 {
     fn max_size_hint(&self) -> usize {
         std::mem::size_of::<Self>()
     }

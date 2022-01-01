@@ -34,9 +34,9 @@ pub struct BoxedWrapper<T>(pub T);
 
 impl<T> Boxed for BoxedWrapper<T> {}
 
-impl<T> WriteToPacket for BoxedWrapper<T>
+impl<T> TlWrite for BoxedWrapper<T>
 where
-    T: BoxedConstructor + WriteToPacket,
+    T: BoxedConstructor + TlWrite,
 {
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -53,9 +53,9 @@ where
     }
 }
 
-impl<'a, T> ReadFromPacket<'a> for BoxedWrapper<T>
+impl<'a, T> TlRead<'a> for BoxedWrapper<T>
 where
-    T: BoxedConstructor + ReadFromPacket<'a>,
+    T: BoxedConstructor + TlRead<'a>,
 {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         if u32::read_from(packet, offset)? == T::ID {

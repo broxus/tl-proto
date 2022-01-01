@@ -4,10 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["proc"]
+members = ["proc", "test_suite"]
 
 [dependencies]
 anyhow = "1.0"
 bytemuck = "1.7"
 smallvec = { version = "1.7", features = ["union", "const_generics"] }
 thiserror = "1.0"
+
+tl-proto-proc = { version = "=0.1.0", path = "proc", optional = true }
+
+[features]
+derive = ["tl-proto-proc"]

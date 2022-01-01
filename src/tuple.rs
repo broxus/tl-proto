@@ -1,11 +1,11 @@
 use crate::traits::*;
 
-/// Implements `ReadFromPacket` and `WriteToPacket` for tuples
+/// Implements `TlRead` and `TlWrite` for tuples
 macro_rules! impl_traits_for_tuple {
     ($($num:tt $ty:ident),*) => {
-        impl<'a, $($ty),*> ReadFromPacket<'a> for ($($ty),*,)
+        impl<'a, $($ty),*> TlRead<'a> for ($($ty),*,)
         where
-            $($ty: ReadFromPacket<'a>),*
+            $($ty: TlRead<'a>),*
         {
             #[inline(always)]
             fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
@@ -13,9 +13,9 @@ macro_rules! impl_traits_for_tuple {
             }
         }
 
-        impl<$($ty),*> WriteToPacket for ($($ty),*,)
+        impl<$($ty),*> TlWrite for ($($ty),*,)
         where
-            $($ty: WriteToPacket),*
+            $($ty: TlWrite),*
         {
             #[inline(always)]
             fn max_size_hint(&self) -> usize {

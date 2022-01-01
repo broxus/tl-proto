@@ -14,9 +14,9 @@ pub struct Container<'a> {
 
 impl<'a> Container<'a> {
     pub fn from_ast(cx: &Ctxt, item: &'a syn::DeriveInput) -> Option<Self> {
-        let mut attrs = attr::Container::from_ast(cx, item);
+        let attrs = attr::Container::from_ast(cx, item);
 
-        let mut data = match &item.data {
+        let data = match &item.data {
             syn::Data::Enum(data) => Data::Enum(enum_from_ast(cx, &data.variants)),
             syn::Data::Struct(data) => {
                 let (style, fields) = struct_from_ast(cx, &data.fields);
@@ -70,15 +70,19 @@ fn struct_from_ast<'a>(cx: &Ctxt, fields: &'a syn::Fields) -> (Style, Vec<Field<
 }
 
 fn fields_from_ast<'a>(cx: &Ctxt, fields: &'a Punctuated<syn::Field, Token![,]>) -> Vec<Field<'a>> {
-    fields.iter().enumerate().map(|(i, field)| Field {
-        member: match &field.ident {
-            Some(ident) => syn::Member::Named(ident.clone()),
-            None => syn::Member::Unnamed(i.into()),
-        },
-        attrs: attr::Field::from_ast(cx, field),
-        ty: &field.ty,
-        original: field,
-    })
+    fields
+        .iter()
+        .enumerate()
+        .map(|(i, field)| Field {
+            member: match &field.ident {
+                Some(ident) => syn::Member::Named(ident.clone()),
+                None => syn::Member::Unnamed(i.into()),
+            },
+            attrs: attr::Field::from_ast(cx, field),
+            ty: &field.ty,
+            original: field,
+        })
+        .collect()
 }
 
 pub enum Data<'a> {

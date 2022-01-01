@@ -3,7 +3,7 @@ use smallvec::SmallVec;
 use crate::traits::*;
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
-impl<'a> ReadFromPacket<'a> for &'a [u8] {
+impl<'a> TlRead<'a> for &'a [u8] {
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         read_bytes(packet, offset)
@@ -11,7 +11,7 @@ impl<'a> ReadFromPacket<'a> for &'a [u8] {
 }
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
-impl WriteToPacket for &[u8] {
+impl TlWrite for &[u8] {
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
         bytes_max_size_hint(self.len())
@@ -27,7 +27,7 @@ impl WriteToPacket for &[u8] {
 }
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
-impl<'a> ReadFromPacket<'a> for Vec<u8> {
+impl<'a> TlRead<'a> for Vec<u8> {
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         Ok(read_bytes(packet, offset)?.to_vec())
@@ -35,7 +35,7 @@ impl<'a> ReadFromPacket<'a> for Vec<u8> {
 }
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
-impl WriteToPacket for Vec<u8> {
+impl TlWrite for Vec<u8> {
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
         bytes_max_size_hint(self.len())
@@ -51,7 +51,7 @@ impl WriteToPacket for Vec<u8> {
 }
 
 /// `ton::int128 | ton::int256` - N bytes of data
-impl<'a, const N: usize> ReadFromPacket<'a> for &'a [u8; N] {
+impl<'a, const N: usize> TlRead<'a> for &'a [u8; N] {
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         read_fixed_bytes(packet, offset)
@@ -59,7 +59,7 @@ impl<'a, const N: usize> ReadFromPacket<'a> for &'a [u8; N] {
 }
 
 /// `ton::int128 | ton::int256` - N bytes of data
-impl<'a, const N: usize> ReadFromPacket<'a> for [u8; N] {
+impl<'a, const N: usize> TlRead<'a> for [u8; N] {
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         read_fixed_bytes(packet, offset).map(|&t| t)
@@ -67,7 +67,7 @@ impl<'a, const N: usize> ReadFromPacket<'a> for [u8; N] {
 }
 
 /// `ton::int128 | ton::int256` - N bytes of data
-impl<const N: usize> WriteToPacket for [u8; N] {
+impl<const N: usize> TlWrite for [u8; N] {
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
         N
@@ -83,44 +83,44 @@ impl<const N: usize> WriteToPacket for [u8; N] {
 }
 
 /// `ton::vector` - 4 bytes of `len`, then `len` items
-impl<'a, T, const N: usize> ReadFromPacket<'a> for SmallVec<[T; N]>
+impl<'a, T, const N: usize> TlRead<'a> for SmallVec<[T; N]>
 where
     [T; N]: smallvec::Array,
-    <[T; N] as smallvec::Array>::Item: ReadFromPacket<'a>,
+    <[T; N] as smallvec::Array>::Item: TlRead<'a>,
 {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = u32::read_from(packet, offset)? as usize;
         let mut items = SmallVec::<[T; N]>::with_capacity(len);
         for _ in 0..len {
-            items.push(ReadFromPacket::read_from(packet, offset)?);
+            items.push(TlRead::read_from(packet, offset)?);
         }
         Ok(items)
     }
 }
 
 /// `ton::vector` - 4 bytes of `len`, then `len` items
-impl<'a, T> ReadFromPacket<'a> for Vec<T>
+impl<'a, T> TlRead<'a> for Vec<T>
 where
-    T: ReadFromPacket<'a>,
+    T: TlRead<'a>,
 {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = u32::read_from(packet, offset)? as usize;
         let mut items = Vec::with_capacity(len);
         for _ in 0..len {
-            items.push(ReadFromPacket::read_from(packet, offset)?);
+            items.push(TlRead::read_from(packet, offset)?);
         }
         Ok(items)
     }
 }
 
 /// `ton::vector` - 4 bytes of `len`, then `len` items
-impl<T> WriteToPacket for &[T]
+impl<T> TlWrite for &[T]
 where
-    T: WriteToPacket,
+    T: TlWrite,
 {
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
-        4 + self.iter().map(WriteToPacket::max_size_hint).sum::<usize>()
+        4 + self.iter().map(TlWrite::max_size_hint).sum::<usize>()
     }
 
     #[inline(always)]
@@ -136,10 +136,10 @@ where
 }
 
 /// `ton::vector` - 4 bytes of `len`, then `len` items
-impl<T, const N: usize> WriteToPacket for SmallVec<[T; N]>
+impl<T, const N: usize> TlWrite for SmallVec<[T; N]>
 where
     [T; N]: smallvec::Array,
-    <[T; N] as smallvec::Array>::Item: WriteToPacket,
+    <[T; N] as smallvec::Array>::Item: TlWrite,
 {
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -168,9 +168,9 @@ where
     }
 }
 
-impl<'a, T> ReadFromPacket<'a> for IntermediateBytes<T>
+impl<'a, T> TlRead<'a> for IntermediateBytes<T>
 where
-    T: ReadFromPacket<'a>,
+    T: TlRead<'a>,
 {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let intermediate = read_bytes(packet, offset)?;
@@ -178,9 +178,9 @@ where
     }
 }
 
-impl<T> WriteToPacket for IntermediateBytes<T>
+impl<T> TlWrite for IntermediateBytes<T>
 where
-    T: WriteToPacket,
+    T: TlWrite,
 {
     fn max_size_hint(&self) -> usize {
         bytes_max_size_hint(self.0.max_size_hint())
@@ -214,7 +214,7 @@ impl AsRef<[u8]> for RawBytes<'_> {
     }
 }
 
-impl<'a> ReadFromPacket<'a> for RawBytes<'a> {
+impl<'a> TlRead<'a> for RawBytes<'a> {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = packet.len() - std::cmp::min(*offset, packet.len());
         let result = unsafe { std::slice::from_raw_parts(packet.as_ptr().add(*offset), len) };
@@ -223,7 +223,7 @@ impl<'a> ReadFromPacket<'a> for RawBytes<'a> {
     }
 }
 
-impl WriteToPacket for RawBytes<'_> {
+impl TlWrite for RawBytes<'_> {
     #[inline]
     fn max_size_hint(&self) -> usize {
         self.0.len()
@@ -248,13 +248,13 @@ impl AsRef<[u8]> for OwnedRawBytes {
     }
 }
 
-impl ReadFromPacket<'_> for OwnedRawBytes {
+impl TlRead<'_> for OwnedRawBytes {
     fn read_from(packet: &'_ [u8], offset: &mut usize) -> TlResult<Self> {
         Ok(Self(RawBytes::read_from(packet, offset)?.0.to_vec()))
     }
 }
 
-impl WriteToPacket for OwnedRawBytes {
+impl TlWrite for OwnedRawBytes {
     #[inline]
     fn max_size_hint(&self) -> usize {
         self.0.len()

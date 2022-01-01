@@ -6,7 +6,7 @@ pub struct HashWrapper<T>(pub T);
 
 impl<T> Hash for HashWrapper<T>
 where
-    T: UpdateSignatureHasher,
+    T: TlHash,
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.update_hasher(&mut HashWriter(state))

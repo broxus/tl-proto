@@ -1,9 +1,16 @@
 pub const TL: Symbol = Symbol("tl");
+
 pub const BOXED: Symbol = Symbol("boxed");
 pub const ID: Symbol = Symbol("id");
+
 pub const SIZE_HINT: Symbol = Symbol("size_hint");
+
 pub const FLAGS: Symbol = Symbol("flags");
 pub const FLAGS_BIT: Symbol = Symbol("flags_bit");
+
+pub const SKIP_WRITE: Symbol = Symbol("skip_write");
+pub const SKIP_READ: Symbol = Symbol("skip_read");
+pub const SKIP_HASH: Symbol = Symbol("skip_hash");
 
 #[derive(Copy, Clone)]
 pub struct Symbol(&'static str);
