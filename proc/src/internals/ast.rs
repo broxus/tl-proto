@@ -1,8 +1,8 @@
 use syn::punctuated::Punctuated;
 use syn::Token;
 
-use super::attr;
 use super::ctxt::*;
+use super::{attr, check};
 
 pub struct Container<'a> {
     pub ident: syn::Ident,
@@ -28,13 +28,15 @@ impl<'a> Container<'a> {
             }
         };
 
-        Some(Self {
+        let container = Self {
             ident: item.ident.clone(),
             attrs,
             data,
             generics: &item.generics,
             original: item,
-        })
+        };
+        check::check(cx, &container);
+        Some(container)
     }
 }
 

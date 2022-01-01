@@ -67,7 +67,7 @@ fn build_struct(container: &ast::Container, fields: &[ast::Field]) -> TokenStrea
             }
         };
         if container.attrs.boxed {
-            quote! { 4 + #tokens }
+            quote! { 4usize + #tokens }
         } else {
             tokens
         }
@@ -76,7 +76,7 @@ fn build_struct(container: &ast::Container, fields: &[ast::Field]) -> TokenStrea
     let write_to = {
         let id = container.attrs.boxed.then(|| container.attrs.id).flatten();
         let prefix = id
-            .map(|id| quote! { u32::write_to(&#id, packet); })
+            .map(|id: u32| quote! { _tl_proto::TlWrite::write_to::<P_>(&#id, packet); })
             .into_iter();
 
         let fields = prefix.chain(fields.iter().filter(|field| !field.attrs.skip_write).map(

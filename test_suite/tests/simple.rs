@@ -5,7 +5,7 @@ mod tests {
     #[derive(TlWrite)]
     #[tl(boxed, id = 0xffffffff)]
     struct Test {
-        #[tl(size_hint = 1)]
+        #[tl(size_hint = 4)]
         item: u32,
         struct_field: InnerTest,
         #[tl(skip_write)]
