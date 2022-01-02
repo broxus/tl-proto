@@ -1,12 +1,12 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use super::{bound, dummy};
+use super::{bound, dummy, Derive};
 use crate::internals::{ast, attr, ctxt};
 
 pub fn impl_derive_tl_write(input: syn::DeriveInput) -> Result<TokenStream, Vec<syn::Error>> {
     let cx = ctxt::Ctxt::new();
-    let container = match ast::Container::from_ast(&cx, &input) {
+    let container = match ast::Container::from_ast(&cx, &input, Derive::Write) {
         Some(container) => container,
         None => return Err(cx.check().unwrap_err()),
     };
@@ -16,7 +16,10 @@ pub fn impl_derive_tl_write(input: syn::DeriveInput) -> Result<TokenStream, Vec<
     let generics = build_generics(&container);
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let body = build_body(&container);
+    let body = match &container.data {
+        ast::Data::Enum(variants) => build_enum(&container, variants),
+        ast::Data::Struct(_, fields) => build_struct(&container, fields),
+    };
 
     let result = quote! {
         impl #impl_generics _tl_proto::TlWrite for #ident #ty_generics #where_clause {
@@ -36,13 +39,6 @@ fn build_generics(container: &ast::Container) -> syn::Generics {
         |field, _| !field.skip_write,
         &syn::parse_quote!(_tl_proto::TlWrite),
     )
-}
-
-fn build_body(container: &ast::Container) -> TokenStream {
-    match &container.data {
-        ast::Data::Enum(variants) => build_enum(container, variants),
-        ast::Data::Struct(_, fields) => build_struct(container, fields),
-    }
 }
 
 fn build_enum(container: &ast::Container, variants: &[ast::Variant]) -> TokenStream {

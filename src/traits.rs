@@ -1,6 +1,28 @@
+use std::sync::Arc;
+
 /// Specifies how this type can read from the packet
 pub trait TlRead<'a>: Sized {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self>;
+}
+
+impl<'a, T> TlRead<'a> for Arc<T>
+where
+    T: TlRead<'a>,
+{
+    #[inline(always)]
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
+        Ok(Arc::new(T::read_from(packet, offset)?))
+    }
+}
+
+impl<'a, T> TlRead<'a> for Box<T>
+where
+    T: TlRead<'a>,
+{
+    #[inline(always)]
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
+        Ok(Box::new(T::read_from(packet, offset)?))
+    }
 }
 
 /// Specifies how this type can be written to the packet
@@ -21,11 +43,48 @@ where
         TlWrite::max_size_hint(*self)
     }
 
+    #[inline(always)]
     fn write_to<P>(&self, packet: &mut P)
     where
         P: TlPacket,
     {
         TlWrite::write_to(*self, packet)
+    }
+}
+
+impl<T> TlWrite for Box<T>
+where
+    T: TlWrite,
+{
+    #[inline(always)]
+    fn max_size_hint(&self) -> usize {
+        TlWrite::max_size_hint(&**self)
+    }
+
+    #[inline(always)]
+    fn write_to<P>(&self, packet: &mut P)
+    where
+        P: TlPacket,
+    {
+        TlWrite::write_to(&**self, packet)
+    }
+}
+
+impl<T> TlWrite for Arc<T>
+where
+    T: TlWrite,
+{
+    #[inline(always)]
+    fn max_size_hint(&self) -> usize {
+        TlWrite::max_size_hint(&**self)
+    }
+
+    #[inline(always)]
+    fn write_to<P>(&self, packet: &mut P)
+    where
+        P: TlPacket,
+    {
+        TlWrite::write_to(&**self, packet)
     }
 }
 
@@ -40,6 +99,7 @@ impl<T> TlHash for &T
 where
     T: TlHash,
 {
+    #[inline(always)]
     fn update_hasher<H>(&self, hasher: &mut H)
     where
         H: TlPacket,

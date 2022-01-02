@@ -224,12 +224,12 @@ impl<'a> TlRead<'a> for RawBytes<'a> {
 }
 
 impl TlWrite for RawBytes<'_> {
-    #[inline]
+    #[inline(always)]
     fn max_size_hint(&self) -> usize {
         self.0.len()
     }
 
-    #[inline]
+    #[inline(always)]
     fn write_to<P>(&self, packet: &mut P)
     where
         P: TlPacket,
@@ -255,12 +255,12 @@ impl TlRead<'_> for OwnedRawBytes {
 }
 
 impl TlWrite for OwnedRawBytes {
-    #[inline]
+    #[inline(always)]
     fn max_size_hint(&self) -> usize {
         self.0.len()
     }
 
-    #[inline]
+    #[inline(always)]
     fn write_to<P>(&self, packet: &mut P)
     where
         P: TlPacket,

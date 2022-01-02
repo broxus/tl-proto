@@ -3,6 +3,7 @@ use syn::Token;
 
 use super::ctxt::*;
 use super::{attr, check};
+use crate::Derive;
 
 pub struct Container<'a> {
     pub ident: syn::Ident,
@@ -13,7 +14,7 @@ pub struct Container<'a> {
 }
 
 impl<'a> Container<'a> {
-    pub fn from_ast(cx: &Ctxt, item: &'a syn::DeriveInput) -> Option<Self> {
+    pub(crate) fn from_ast(cx: &Ctxt, item: &'a syn::DeriveInput, derive: Derive) -> Option<Self> {
         let attrs = attr::Container::from_ast(cx, item);
 
         let data = match &item.data {
@@ -35,7 +36,7 @@ impl<'a> Container<'a> {
             generics: &item.generics,
             original: item,
         };
-        check::check(cx, &container);
+        check::check(cx, &container, derive);
         Some(container)
     }
 }

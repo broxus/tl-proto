@@ -1,15 +1,18 @@
 use super::ast::*;
 use super::attr;
 use super::ctxt::*;
+use crate::Derive;
 
-pub fn check(cx: &Ctxt, container: &Container) {
-    check_boxed(cx, container);
+pub(crate) fn check(cx: &Ctxt, container: &Container, derive: Derive) {
+    check_boxed(cx, container, derive);
     check_size_hints(cx, container);
 }
 
-fn check_boxed(cx: &Ctxt, container: &Container) {
+fn check_boxed(cx: &Ctxt, container: &Container, derive: Derive) {
     match &container.data {
         Data::Enum(variants) => {
+            let must_be_boxed = derive == Derive::Read;
+
             if container.attrs.id.is_some() {
                 cx.error_spanned_by(
                     container.original,
@@ -24,6 +27,13 @@ fn check_boxed(cx: &Ctxt, container: &Container) {
                 )
             }
 
+            if !container.attrs.boxed && must_be_boxed {
+                cx.error_spanned_by(
+                    container.original,
+                    "#[tl(boxed)] is required to implement TlRead for enums",
+                )
+            }
+
             for variant in variants {
                 if container.attrs.boxed && variant.attrs.id.is_none() {
                     cx.error_spanned_by(
@@ -32,7 +42,7 @@ fn check_boxed(cx: &Ctxt, container: &Container) {
                     )
                 }
 
-                if !container.attrs.boxed && variant.attrs.id.is_some() {
+                if !must_be_boxed && !container.attrs.boxed && variant.attrs.id.is_some() {
                     cx.error_spanned_by(
                         variant.original,
                         "#[tl(id = 0x...)] is not allowed for bare enum variant",
