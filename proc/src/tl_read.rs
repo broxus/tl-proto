@@ -30,7 +30,7 @@ pub fn impl_derive_tl_read(input: syn::DeriveInput) -> Result<TokenStream, Vec<s
     let (impl_generics, _, _) = alt_generics.split_for_impl();
 
     let body = match &container.data {
-        ast::Data::Enum(_) => todo!(), // build_enum(&container, variants),
+        ast::Data::Enum(variants) => build_enum(variants),
         ast::Data::Struct(style, fields) => build_struct(&container, style, fields),
     };
 
@@ -54,6 +54,29 @@ fn build_generics(container: &ast::Container) -> syn::Generics {
     )
 }
 
+fn build_enum(variants: &[ast::Variant]) -> TokenStream {
+    let variants = variants.iter().filter_map(|variant| {
+        let id = variant.attrs.id?;
+
+        let ident = &variant.ident;
+        let read_from = build_read_from(quote! { Self::#ident }, &variant.style, &variant.fields);
+        Some(quote! {
+            #id => {
+                #read_from
+            }
+        })
+    });
+
+    quote! {
+        fn read_from(packet: &'tl [u8], offset: &mut usize) -> _tl_proto::TlResult<Self> {
+            match u32::read_from(packet, offset)? {
+                #(#variants)*
+                _ => Err(_tl_proto::TlError::UnknownConstructor)
+            }
+        }
+    }
+}
+
 fn build_struct(
     container: &ast::Container,
     style: &ast::Style,
@@ -70,7 +93,7 @@ fn build_struct(
         })
         .into_iter();
 
-    let read_from = build_read_from(&quote! { Self }, style, fields);
+    let read_from = build_read_from(quote! { Self }, style, fields);
 
     quote! {
         fn read_from(packet: &'tl [u8], offset: &mut usize) -> _tl_proto::TlResult<Self> {
@@ -80,7 +103,7 @@ fn build_struct(
     }
 }
 
-fn build_read_from(ident: &TokenStream, style: &ast::Style, fields: &[ast::Field]) -> TokenStream {
+fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]) -> TokenStream {
     let idents = fields.iter().map(|field| match &field.member {
         syn::Member::Named(field) => field.to_token_stream(),
         syn::Member::Unnamed(i) => quote::format_ident!("field_{}", i).to_token_stream(),
