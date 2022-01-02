@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::ast::*;
 use super::attr;
 use super::ctxt::*;
@@ -34,6 +36,7 @@ fn check_boxed(cx: &Ctxt, container: &Container, derive: Derive) {
                 )
             }
 
+            let mut unique_ids = HashSet::new();
             for variant in variants {
                 if container.attrs.boxed && variant.attrs.id.is_none() {
                     cx.error_spanned_by(
@@ -47,6 +50,15 @@ fn check_boxed(cx: &Ctxt, container: &Container, derive: Derive) {
                         variant.original,
                         "#[tl(id = 0x...)] is not allowed for bare enum variant",
                     )
+                }
+
+                if let Some(id) = variant.attrs.id {
+                    if !unique_ids.insert(id) {
+                        cx.error_spanned_by(
+                            variant.original,
+                            "duplicate value found for #[tl(id = 0x...)]",
+                        )
+                    }
                 }
             }
         }
