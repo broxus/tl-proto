@@ -14,7 +14,6 @@ mod tl_write;
 enum Derive {
     Write,
     Read,
-    Hash,
 }
 
 #[proc_macro_derive(TlWrite, attributes(tl))]
@@ -31,12 +30,6 @@ pub fn derive_tl_read(input: TokenStream) -> TokenStream {
     impl_derive_tl_read(input)
         .unwrap_or_else(to_compile_errors)
         .into()
-}
-
-#[proc_macro_derive(TlHash, attributes(tl))]
-pub fn derive_tl_hash(input: TokenStream) -> TokenStream {
-    let _input = syn::parse_macro_input!(input as syn::DeriveInput);
-    todo!()
 }
 
 fn to_compile_errors(errors: Vec<syn::Error>) -> proc_macro2::TokenStream {

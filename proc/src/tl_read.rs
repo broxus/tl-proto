@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
 use super::{bound, dummy, Derive};
-use crate::internals::{ast, attr, ctxt};
+use crate::internals::{ast, ctxt};
 
 pub fn impl_derive_tl_read(input: syn::DeriveInput) -> Result<TokenStream, Vec<syn::Error>> {
     let cx = ctxt::Ctxt::new();

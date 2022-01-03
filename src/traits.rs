@@ -88,37 +88,20 @@ where
     }
 }
 
-/// Trait for types which can be signed. Used to overwrite serialization for signer
-pub trait TlHash {
-    fn update_hasher<H>(&self, hasher: &mut H)
-    where
-        H: TlPacket;
-}
-
-impl<T> TlHash for &T
-where
-    T: TlHash,
-{
-    #[inline(always)]
-    fn update_hasher<H>(&self, hasher: &mut H)
-    where
-        H: TlPacket,
-    {
-        T::update_hasher(*self, hasher)
-    }
-}
-
 /// TL packet interface
 pub trait TlPacket {
+    const TARGET: TlTarget;
+
     fn write_u32(&mut self, data: u32);
     fn write_i32(&mut self, data: i32);
     fn write_u64(&mut self, data: u64);
     fn write_i64(&mut self, data: i64);
-    fn write_f64(&mut self, data: f64);
     fn write_raw_slice(&mut self, data: &[u8]);
 }
 
 impl TlPacket for Vec<u8> {
+    const TARGET: TlTarget = TlTarget::Packet;
+
     #[inline(always)]
     fn write_u32(&mut self, data: u32) {
         self.extend_from_slice(&data.to_le_bytes());
@@ -140,14 +123,15 @@ impl TlPacket for Vec<u8> {
     }
 
     #[inline(always)]
-    fn write_f64(&mut self, data: f64) {
-        self.extend_from_slice(&data.to_le_bytes());
-    }
-
-    #[inline(always)]
     fn write_raw_slice(&mut self, data: &[u8]) {
         self.extend_from_slice(data);
     }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum TlTarget {
+    Packet,
+    Hasher,
 }
 
 pub type TlResult<T> = Result<T, TlError>;
