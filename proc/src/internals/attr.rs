@@ -133,6 +133,7 @@ impl Field {
         let mut size_hint = Attr::none(cx, SIZE_HINT);
         let mut flags = BoolAttr::none(cx, FLAGS);
         let mut flags_bit = Attr::none(cx, FLAGS_BIT);
+        let mut skip = BoolAttr::none(cx, SKIP);
         let mut skip_write = BoolAttr::none(cx, SKIP_WRITE);
         let mut skip_read = BoolAttr::none(cx, SKIP_READ);
         let mut signature = BoolAttr::none(cx, SIGNATURE);
@@ -159,6 +160,10 @@ impl Field {
                     if let Ok(n) = get_lit_number(cx, FLAGS_BIT, &m.lit) {
                         flags_bit.set(&m.path, n);
                     }
+                }
+                // Parse `#[tl(skip)]`
+                Meta(Path(word)) if word == SKIP => {
+                    skip.set_true(word);
                 }
                 // Parse `#[tl(skip_write)]`
                 Meta(Path(word)) if word == SKIP_WRITE => {
@@ -194,8 +199,8 @@ impl Field {
             size_hint: size_hint.get(),
             flags: flags.get(),
             flags_bit: flags_bit.get(),
-            skip_write: skip_write.get(),
-            skip_read: skip_read.get(),
+            skip_write: skip.get() || skip_write.get(),
+            skip_read: skip.get() || skip_read.get(),
             signature: signature.get(),
         }
     }

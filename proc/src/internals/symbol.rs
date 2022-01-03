@@ -8,6 +8,7 @@ pub const SIZE_HINT: Symbol = Symbol("size_hint");
 pub const FLAGS: Symbol = Symbol("flags");
 pub const FLAGS_BIT: Symbol = Symbol("flags_bit");
 
+pub const SKIP: Symbol = Symbol("skip");
 pub const SKIP_WRITE: Symbol = Symbol("skip_write");
 pub const SKIP_READ: Symbol = Symbol("skip_read");
 pub const SIGNATURE: Symbol = Symbol("signature");
