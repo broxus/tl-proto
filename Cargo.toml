@@ -8,6 +8,7 @@ members = ["proc", "test_suite"]
 
 [dependencies]
 anyhow = "1.0"
+digest = "0.10"
 smallvec = { version = "1.7", features = ["union", "const_generics"] }
 thiserror = "1.0"
 

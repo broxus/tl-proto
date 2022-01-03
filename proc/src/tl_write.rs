@@ -260,8 +260,18 @@ where
             .iter()
             .filter(|field| !field.attrs.skip_write)
             .map(|field| {
-                let field = build_field(field);
-                quote! { _tl_proto::TlWrite::write_to::<P_>(#field, packet); }
+                let field_name = build_field(field);
+                if field.attrs.signature {
+                    quote! {
+                        if <P_ as _tl_proto::TlPacket>::TARGET == _tl_proto::TlTarget::Packet {
+                            _tl_proto::TlWrite::write_to::<P_>(#field_name, packet);
+                        } else {
+                            <&[u8] as _tl_proto::TlWrite>::write_to::<P_>(&[].as_slice(), packet);
+                        }
+                    }
+                } else {
+                    quote! { _tl_proto::TlWrite::write_to::<P_>(#field_name, packet); }
+                }
             }),
     );
 

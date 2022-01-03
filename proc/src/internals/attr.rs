@@ -125,7 +125,7 @@ pub struct Field {
     pub flags_bit: Option<u8>,
     pub skip_write: bool,
     pub skip_read: bool,
-    pub skip_hash: bool,
+    pub signature: bool,
 }
 
 impl Field {
@@ -135,7 +135,7 @@ impl Field {
         let mut flags_bit = Attr::none(cx, FLAGS_BIT);
         let mut skip_write = BoolAttr::none(cx, SKIP_WRITE);
         let mut skip_read = BoolAttr::none(cx, SKIP_READ);
-        let mut skip_hash = BoolAttr::none(cx, SKIP_HASH);
+        let mut signature = BoolAttr::none(cx, SIGNATURE);
 
         for meta_item in field
             .attrs
@@ -168,9 +168,9 @@ impl Field {
                 Meta(Path(word)) if word == SKIP_READ => {
                     skip_read.set_true(word);
                 }
-                // Parse `#[tl(skip_hash)]`
-                Meta(Path(word)) if word == SKIP_HASH => {
-                    skip_hash.set_true(word);
+                // Parse `#[tl(signature)]`
+                Meta(Path(word)) if word == SIGNATURE => {
+                    signature.set_true(word);
                 }
                 // Other
                 Meta(meta_item) => {
@@ -196,7 +196,7 @@ impl Field {
             flags_bit: flags_bit.get(),
             skip_write: skip_write.get(),
             skip_read: skip_read.get(),
-            skip_hash: skip_hash.get(),
+            signature: signature.get(),
         }
     }
 }

@@ -10,7 +10,7 @@ pub const FLAGS_BIT: Symbol = Symbol("flags_bit");
 
 pub const SKIP_WRITE: Symbol = Symbol("skip_write");
 pub const SKIP_READ: Symbol = Symbol("skip_read");
-pub const SKIP_HASH: Symbol = Symbol("skip_hash");
+pub const SIGNATURE: Symbol = Symbol("signature");
 
 #[derive(Copy, Clone)]
 pub struct Symbol(&'static str);

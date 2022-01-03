@@ -50,6 +50,14 @@ mod tests {
         slice: &'a [u8],
     }
 
+    #[derive(TlWrite)]
+    #[tl(boxed, id = 0x1)]
+    struct WithSignature {
+        data: u32,
+        #[tl(signature)]
+        sign: [u8; 64],
+    }
+
     #[test]
     fn test_build() {}
 

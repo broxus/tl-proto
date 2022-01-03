@@ -4,6 +4,46 @@ use crate::traits::*;
 
 pub struct HashWrapper<T>(pub T);
 
+impl<T> HashWrapper<T>
+where
+    T: TlWrite,
+{
+    pub fn update_hasher<H>(&self, engine: &mut dyn digest::Update) {
+        self.0.write_to(&mut DigestWriter(engine));
+    }
+}
+
+struct DigestWriter<'a>(&'a mut dyn digest::Update);
+
+impl TlPacket for DigestWriter<'_> {
+    const TARGET: TlTarget = TlTarget::Hasher;
+
+    #[inline(always)]
+    fn write_u32(&mut self, data: u32) {
+        self.0.update(&data.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn write_i32(&mut self, data: i32) {
+        self.0.update(&data.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn write_u64(&mut self, data: u64) {
+        self.0.update(&data.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn write_i64(&mut self, data: i64) {
+        self.0.update(&data.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn write_raw_slice(&mut self, data: &[u8]) {
+        self.0.update(data);
+    }
+}
+
 impl<T> Hash for HashWrapper<T>
 where
     T: TlWrite,
