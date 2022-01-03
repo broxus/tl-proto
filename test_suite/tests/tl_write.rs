@@ -55,7 +55,7 @@ mod tests {
     struct WithSignature {
         data: u32,
         #[tl(signature)]
-        sign: [u8; 64],
+        sign: [u8; 4],
     }
 
     #[test]
@@ -84,6 +84,17 @@ mod tests {
         ];
         let data_bytes = [0, 1, 2, 3];
         let data = tl_proto::serialize(&SliceWrapper { slice: &data_bytes });
+        assert_eq!(&data, &target);
+
+        let target = [
+            1, 0, 0, 0, // id
+            123, 0, 0, 0, // data
+            1, 2, 3, 4, // signature
+        ];
+        let data = tl_proto::serialize(&WithSignature {
+            data: 123,
+            sign: [1, 2, 3, 4],
+        });
         assert_eq!(&data, &target);
     }
 }

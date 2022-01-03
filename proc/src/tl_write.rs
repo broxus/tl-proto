@@ -266,7 +266,7 @@ where
                         if <P_ as _tl_proto::TlPacket>::TARGET == _tl_proto::TlTarget::Packet {
                             _tl_proto::TlWrite::write_to::<P_>(#field_name, packet);
                         } else {
-                            <&[u8] as _tl_proto::TlWrite>::write_to::<P_>(&[].as_slice(), packet);
+                            <&[u8] as _tl_proto::TlWrite>::write_to::<P_>(&[].as_ref(), packet);
                         }
                     }
                 } else {
