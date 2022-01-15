@@ -8,6 +8,7 @@ use crate::Derive;
 pub(crate) fn check(cx: &Ctxt, container: &Container, derive: Derive) {
     check_boxed(cx, container, derive);
     check_size_hints(cx, container);
+    check_flags(cx, container);
 }
 
 fn check_boxed(cx: &Ctxt, container: &Container, derive: Derive) {
@@ -108,6 +109,51 @@ where
                 cx.error_spanned_by(object, "size hint must be aligned to 4 bytes")
             }
             _ => {}
+        }
+    }
+}
+
+fn check_flags(cx: &Ctxt, container: &Container) {
+    let check_fields = |cx: &Ctxt, fields: &[Field]| {
+        let mut has_flags_field = false;
+        for field in fields {
+            if field.attrs.flags {
+                if has_flags_field {
+                    cx.error_spanned_by(
+                        field.original,
+                        "only single field with #[tl(flags)] is allowed",
+                    );
+                }
+                if field.attrs.flags_bit.is_some() {
+                    cx.error_spanned_by(
+                        field.original,
+                        "#[tl(flags)] can't be used for one field with #[tl(flags_bit = ...)]",
+                    )
+                }
+                if field.attrs.skip_read || field.attrs.skip_write {
+                    cx.error_spanned_by(field.original, "field with #[tl(flags)] can't be skipped");
+                }
+                has_flags_field = true;
+            }
+
+            if field.attrs.flags_bit.is_some() && !has_flags_field {
+                cx.error_spanned_by(
+                    field.original,
+                    "the field with #[tl(flags_bit = ...)] must \
+                be declared after the field with #[tl(flags)]",
+                )
+            }
+        }
+    };
+
+    match &container.data {
+        Data::Enum(variants) => {
+            for variant in variants {
+                check_fields(cx, &variant.fields);
+            }
+        }
+        Data::Struct(_, fields) => {
+            check_fields(cx, fields);
         }
     }
 }
