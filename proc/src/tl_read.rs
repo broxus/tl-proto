@@ -68,8 +68,8 @@ fn build_enum(variants: &[ast::Variant]) -> TokenStream {
     });
 
     quote! {
-        fn read_from(packet: &'tl [u8], offset: &mut usize) -> _tl_proto::TlResult<Self> {
-            match u32::read_from(packet, offset)? {
+        fn read_from(__packet: &'tl [u8], __offset: &mut usize) -> _tl_proto::TlResult<Self> {
+            match u32::read_from(__packet, __offset)? {
                 #(#variants)*
                 _ => Err(_tl_proto::TlError::UnknownConstructor)
             }
@@ -86,7 +86,7 @@ fn build_struct(
     let prefix = id
         .map(|id| {
             quote! {
-                if u32::read_from(packet, offset)? != #id {
+                if u32::read_from(__packet, __offset)? != #id {
                     return Err(_tl_proto::TlError::UnknownConstructor)
                 }
             }
@@ -96,7 +96,7 @@ fn build_struct(
     let read_from = build_read_from(quote! { Self }, style, fields);
 
     quote! {
-        fn read_from(packet: &'tl [u8], offset: &mut usize) -> _tl_proto::TlResult<Self> {
+        fn read_from(__packet: &'tl [u8], __offset: &mut usize) -> _tl_proto::TlResult<Self> {
             #(#prefix)*
             #read_from
         }
@@ -129,14 +129,14 @@ fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]
                         let mask = 0x1u32 << flags_bit;
                         quote! {
                             let #ident = if #flags_field & #mask != 0 {
-                                Some(<<#ty as IntoIterator>::Item as _tl_proto::TlRead<'tl>>::read_from(packet, offset)?)
+                                Some(<<#ty as IntoIterator>::Item as _tl_proto::TlRead<'tl>>::read_from(__packet, __offset)?)
                             } else {
                                 None
                             };
                         }
                     }
                     _ => {
-                        quote! { let #ident = <#ty as _tl_proto::TlRead<'tl>>::read_from(packet, offset)?; }
+                        quote! { let #ident = <#ty as _tl_proto::TlRead<'tl>>::read_from(__packet, __offset)?; }
                     }
                 }
             }

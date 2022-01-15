@@ -101,7 +101,7 @@ fn build_enum(container: &ast::Container, variants: &[ast::Variant]) -> TokenStr
             #max_size_hint
         }
 
-        fn write_to<P_>(&self, packet: &mut P_)
+        fn write_to<P_>(&self, __packet: &mut P_)
         where
             P_: _tl_proto::TlPacket
         {
@@ -195,7 +195,7 @@ fn build_struct(container: &ast::Container, fields: &[ast::Field]) -> TokenStrea
             #max_size_hint
         }
 
-        fn write_to<P_>(&self, packet: &mut P_)
+        fn write_to<P_>(&self, __packet: &mut P_)
         where
             P_: _tl_proto::TlPacket
         {
@@ -261,7 +261,7 @@ where
 
     let id = boxed.then(|| id).flatten();
     let prefix = id
-        .map(|id: u32| quote! { _tl_proto::TlWrite::write_to::<P_>(&#id, packet); })
+        .map(|id: u32| quote! { _tl_proto::TlWrite::write_to::<P_>(&#id, __packet); })
         .into_iter();
 
     let fields = prefix.chain(
@@ -271,17 +271,17 @@ where
             .map(|field| {
                 let field_name = build_field(field);
                 if field.attrs.flags {
-                    quote! { <u32 as _tl_proto::TlWrite>::write_to::<P_>(&(#(#fields_checks)|*), packet); }
+                    quote! { <u32 as _tl_proto::TlWrite>::write_to::<P_>(&(#(#fields_checks)|*), __packet); }
                 } else if field.attrs.signature {
                     quote! {
                         if <P_ as _tl_proto::TlPacket>::TARGET == _tl_proto::TlTarget::Packet {
-                            _tl_proto::TlWrite::write_to::<P_>(#field_name, packet);
+                            _tl_proto::TlWrite::write_to::<P_>(#field_name, __packet);
                         } else {
-                            <&[u8] as _tl_proto::TlWrite>::write_to::<P_>(&[].as_ref(), packet);
+                            <&[u8] as _tl_proto::TlWrite>::write_to::<P_>(&[].as_ref(), __packet);
                         }
                     }
                 } else {
-                    quote! { _tl_proto::TlWrite::write_to::<P_>(#field_name, packet); }
+                    quote! { _tl_proto::TlWrite::write_to::<P_>(#field_name, __packet); }
                 }
             }),
     );
