@@ -1,7 +1,11 @@
 [package]
 name = "tl-proto"
+description = "A collection of traits for working with TL serialization/deserialization"
+repository = "https://github.com/broxus/tl-proto"
 version = "0.1.0"
 edition = "2021"
+include = ["src/**/*.rs", "README.md", "LICENSE"]
+license-file = "./LICENSE"
 
 [workspace]
 members = ["proc", "test_suite"]
