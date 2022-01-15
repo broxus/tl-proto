@@ -250,6 +250,15 @@ fn build_write_to<F>(
 where
     F: FnMut(&ast::Field) -> TokenStream,
 {
+    let fields_checks = std::iter::once(quote! { 0u32 })
+        .chain(fields.iter().filter_map(|field| {
+            field.attrs.flags_bit.map(|flags_bit| {
+                let field_name = build_field(field);
+                quote! { ((*#field_name.is_some() as u32) << #flags_bit) }
+            })
+        }))
+        .collect::<Vec<_>>();
+
     let id = boxed.then(|| id).flatten();
     let prefix = id
         .map(|id: u32| quote! { _tl_proto::TlWrite::write_to::<P_>(&#id, packet); })
@@ -261,7 +270,9 @@ where
             .filter(|field| !field.attrs.skip_write)
             .map(|field| {
                 let field_name = build_field(field);
-                if field.attrs.signature {
+                if field.attrs.flags {
+                    quote! { <u32 as _tl_proto::TlWrite>::write_to::<P_>(&(#(#fields_checks)|*), packet); }
+                } else if field.attrs.signature {
                     quote! {
                         if <P_ as _tl_proto::TlPacket>::TARGET == _tl_proto::TlTarget::Packet {
                             _tl_proto::TlWrite::write_to::<P_>(#field_name, packet);

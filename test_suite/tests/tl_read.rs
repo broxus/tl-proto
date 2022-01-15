@@ -28,6 +28,27 @@ mod tests {
         Third,
     }
 
+    #[derive(TlRead)]
+    struct StructWithFlags {
+        #[tl(flags)]
+        flags: u32,
+        #[tl(flags_bit = 0)]
+        value_1: Option<u32>,
+        #[tl(flags_bit = 31)]
+        value_2: Option<bool>,
+    }
+
     #[test]
     fn test_build() {}
+
+    #[test]
+    fn correct_deserialization() {
+        let target = [
+            0, 0, 0, 0x80, // flags
+            181, 117, 114, 153, // value_2: Some
+        ];
+        let data: StructWithFlags = tl_proto::deserialize(&target).unwrap();
+        assert_eq!(data.value_1, None);
+        assert_eq!(data.value_2, Some(true))
+    }
 }

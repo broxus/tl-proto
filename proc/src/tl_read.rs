@@ -109,17 +109,38 @@ fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]
         syn::Member::Unnamed(i) => quote::format_ident!("field_{}", i).to_token_stream(),
     });
 
+    let mut flags_field_name = None;
+
     let reads = idents
         .clone()
-        .zip(fields.iter().map(|field| {
+        .zip(fields.iter())
+        .map(|(ident, field)| {
+            if field.attrs.flags {
+                flags_field_name = Some(ident.clone());
+            }
+
             if field.attrs.skip_read {
-                quote! { Default::default() }
+                quote! { let #ident = Default::default(); }
             } else {
                 let ty = &field.ty;
-                quote! { <#ty as _tl_proto::TlRead<'tl>>::read_from(packet, offset)? }
+
+                match (field.attrs.flags_bit, &flags_field_name) {
+                    (Some(flags_bit), Some(flags_field)) => {
+                        let mask = 0x1u32 << flags_bit;
+                        quote! {
+                            let #ident = if #flags_field & #mask != 0 {
+                                Some(<<#ty as IntoIterator>::Item as _tl_proto::TlRead<'tl>>::read_from(packet, offset)?)
+                            } else {
+                                None
+                            };
+                        }
+                    }
+                    _ => {
+                        quote! { let #ident = <#ty as _tl_proto::TlRead<'tl>>::read_from(packet, offset)?; }
+                    }
+                }
             }
-        }))
-        .map(|(ident, read)| quote! { let #ident = #read; });
+        });
 
     match style {
         ast::Style::Struct => {

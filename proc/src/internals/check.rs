@@ -124,24 +124,43 @@ fn check_flags(cx: &Ctxt, container: &Container) {
                         "only single field with #[tl(flags)] is allowed",
                     );
                 }
+
                 if field.attrs.flags_bit.is_some() {
                     cx.error_spanned_by(
                         field.original,
                         "#[tl(flags)] can't be used for one field with #[tl(flags_bit = ...)]",
                     )
                 }
+
+                if field.attrs.signature {
+                    cx.error_spanned_by(
+                        field.original,
+                        "#[tl(flags)] can't be used for one field with #[tl(signature)]",
+                    );
+                }
+
                 if field.attrs.skip_read || field.attrs.skip_write {
                     cx.error_spanned_by(field.original, "field with #[tl(flags)] can't be skipped");
                 }
+
                 has_flags_field = true;
             }
 
-            if field.attrs.flags_bit.is_some() && !has_flags_field {
-                cx.error_spanned_by(
-                    field.original,
-                    "the field with #[tl(flags_bit = ...)] must \
+            if let Some(flags_bit) = field.attrs.flags_bit {
+                if !has_flags_field {
+                    cx.error_spanned_by(
+                        field.original,
+                        "the field with #[tl(flags_bit = ...)] must \
                 be declared after the field with #[tl(flags)]",
-                )
+                    )
+                }
+
+                if flags_bit > 31 {
+                    cx.error_spanned_by(
+                        field.original,
+                        "#[tl(flags_bit = ...)] bit index output of range",
+                    )
+                }
             }
         }
     };

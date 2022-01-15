@@ -5,6 +5,7 @@ impl<T> TlWrite for Option<T>
 where
     T: TlWrite,
 {
+    #[inline(always)]
     fn max_size_hint(&self) -> usize {
         if let Some(item) = self {
             item.max_size_hint()
@@ -13,6 +14,7 @@ where
         }
     }
 
+    #[inline(always)]
     fn write_to<P>(&self, packet: &mut P)
     where
         P: TlPacket,
