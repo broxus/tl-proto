@@ -223,9 +223,10 @@ where
                 let fields = fields
                     .iter()
                     .filter(|field| !field.attrs.skip_write)
-                    .map(|field| match &field.attrs.size_hint {
-                        Some(size_hint) => build_size_hint(size_hint),
-                        None => {
+                    .map(|field| match (field.attrs.flags, &field.attrs.size_hint) {
+                        (true, _) => quote! { 4usize },
+                        (false, Some(size_hint)) => build_size_hint(size_hint),
+                        (false, None) => {
                             let field = build_field(field);
                             quote! { #field.max_size_hint() }
                         }
