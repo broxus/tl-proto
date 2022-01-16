@@ -105,42 +105,49 @@ fn build_struct(
 
 fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]) -> TokenStream {
     let idents = fields.iter().map(|field| match &field.member {
-        syn::Member::Named(field) => field.to_token_stream(),
-        syn::Member::Unnamed(i) => quote::format_ident!("field_{}", i).to_token_stream(),
+        syn::Member::Named(member) => {
+            let member = member.to_token_stream();
+            if field.attrs.flags {
+                quote! { #member: () }
+            } else {
+                member
+            }
+        }
+        syn::Member::Unnamed(i) => {
+            if field.attrs.flags {
+                quote! { () }
+            } else {
+                quote::format_ident!("field_{}", i).to_token_stream()
+            }
+        }
     });
 
-    let mut flags_field_name = None;
+    let reads = idents.clone().zip(fields.iter()).map(|(ident, field)| {
+        let ty = &field.ty;
 
-    let reads = idents
-        .clone()
-        .zip(fields.iter())
-        .map(|(ident, field)| {
-            if field.attrs.flags {
-                flags_field_name = Some(ident.clone());
+        if field.attrs.flags {
+            quote! {
+                let __flags = <u32 as _tl_proto::TlRead<'tl>>::read_from(__packet, __offset)?;
             }
-
-            if field.attrs.skip_read {
-                quote! { let #ident = Default::default(); }
-            } else {
-                let ty = &field.ty;
-
-                match (field.attrs.flags_bit, &flags_field_name) {
-                    (Some(flags_bit), Some(flags_field)) => {
-                        let mask = 0x1u32 << flags_bit;
-                        quote! {
-                            let #ident = if #flags_field & #mask != 0 {
-                                Some(<<#ty as IntoIterator>::Item as _tl_proto::TlRead<'tl>>::read_from(__packet, __offset)?)
-                            } else {
-                                None
-                            };
-                        }
-                    }
-                    _ => {
-                        quote! { let #ident = <#ty as _tl_proto::TlRead<'tl>>::read_from(__packet, __offset)?; }
-                    }
-                }
+        } else if field.attrs.skip_read {
+            quote! { let #ident = Default::default(); }
+        } else if let Some(flags_bit) = field.attrs.flags_bit {
+            let mask = 0x1u32 << flags_bit;
+            quote! {
+                let #ident = if __flags & #mask != 0 {
+                    Some(<<#ty as IntoIterator>::Item as _tl_proto::TlRead<'tl>>::read_from(
+                        __packet, __offset,
+                    )?)
+                } else {
+                    None
+                };
             }
-        });
+        } else {
+            quote! {
+                let #ident = <#ty as _tl_proto::TlRead<'tl>>::read_from(__packet, __offset)?;
+            }
+        }
+    });
 
     match style {
         ast::Style::Struct => {

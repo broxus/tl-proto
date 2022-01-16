@@ -31,7 +31,7 @@ mod tests {
     #[derive(TlRead)]
     struct StructWithFlags {
         #[tl(flags)]
-        flags: u32,
+        flags: (),
         #[tl(flags_bit = 0)]
         value_1: Option<u32>,
         #[tl(flags_bit = 31)]

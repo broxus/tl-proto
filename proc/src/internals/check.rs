@@ -104,7 +104,6 @@ where
 {
     if let Some(attr::SizeHint::Explicit { value }) = &size_hint {
         match *value {
-            hint if hint < 4 => cx.error_spanned_by(object, "size hint is too small"),
             hint if hint % 4 != 0 => {
                 cx.error_spanned_by(object, "size hint must be aligned to 4 bytes")
             }
@@ -141,6 +140,13 @@ fn check_flags(cx: &Ctxt, container: &Container) {
 
                 if field.attrs.skip_read || field.attrs.skip_write {
                     cx.error_spanned_by(field.original, "field with #[tl(flags)] can't be skipped");
+                }
+
+                if field.attrs.size_hint.is_some() {
+                    cx.error_spanned_by(
+                        field.original,
+                        "#[tl(size_hint = ...)] is not allowed for flags field",
+                    );
                 }
 
                 has_flags_field = true;
