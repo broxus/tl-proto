@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+#[cfg(feature = "bytes")]
+use bytes::{BufMut, BytesMut};
+
 /// Specifies how this type can read from the packet
 pub trait TlRead<'a>: Sized {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self>;
@@ -125,6 +128,36 @@ impl TlPacket for Vec<u8> {
     #[inline(always)]
     fn write_raw_slice(&mut self, data: &[u8]) {
         self.extend_from_slice(data);
+    }
+}
+
+#[cfg(feature = "bytes")]
+impl TlPacket for BytesMut {
+    const TARGET: TlTarget = TlTarget::Packet;
+
+    #[inline(always)]
+    fn write_u32(&mut self, data: u32) {
+        self.put_slice(&data.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn write_i32(&mut self, data: i32) {
+        self.put_slice(&data.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn write_u64(&mut self, data: u64) {
+        self.put_slice(&data.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn write_i64(&mut self, data: i64) {
+        self.put_slice(&data.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn write_raw_slice(&mut self, data: &[u8]) {
+        self.put_slice(data);
     }
 }
 

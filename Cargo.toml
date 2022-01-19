@@ -2,7 +2,7 @@
 name = "tl-proto"
 description = "A collection of traits for working with TL serialization/deserialization"
 repository = "https://github.com/broxus/tl-proto"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 include = ["src/**/*.rs", "README.md", "LICENSE"]
 license-file = "./LICENSE"
@@ -11,6 +11,7 @@ license-file = "./LICENSE"
 members = ["proc", "test_suite"]
 
 [dependencies]
+bytes = { version = "1.1", optional = true }
 digest = "0.9"
 smallvec = { version = "1.7", features = ["union", "const_generics"] }
 thiserror = "1.0"
@@ -18,4 +19,5 @@ thiserror = "1.0"
 tl-proto-proc = { version = "=0.1.3", path = "proc", optional = true }
 
 [features]
+default = ["derive", "bytes"]
 derive = ["tl-proto-proc"]
