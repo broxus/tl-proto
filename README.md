@@ -56,3 +56,19 @@ fn main() {
     ));
 }
 ```
+
+### Specification
+
+- `i32`, `u32` - 4 bytes in little-endian order.
+- `i64`, `u64` - 8 bytes in little-endian order.
+- `true` - `0x997275b5` as 4 bytes in little-endian order.
+- `false` - `0xbc799737` as 4 bytes in little-endian order.
+- Fixed bytes array of length `N` (where `N % 4 == 0`) - `N` bytes as it is.
+- Bytes array of arbitrary length (`<254`) - 1 byte with length, bytes from array, 
+  padding up to a length multiple of 4.
+- Bytes array of arbitrary length (`≥254`) - 1 byte with value `254`, 3 bytes of length in little-endian order, 
+  bytes from array, padding up to a length multiple of 4.
+- Vector of values with the same type - 4 bytes of length in little-endian order, values one by one.
+- Tuples - values one by one.
+- Enums (boxed types) - 4 bytes of type id in little-endian order, variant value
+  (btw. you can read more about how type id is calculated in telegram docs).
