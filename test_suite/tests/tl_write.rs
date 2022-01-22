@@ -60,7 +60,7 @@ mod tests {
 
     #[derive(TlWrite)]
     struct StructWithFlags {
-        #[tl(flags)]
+        #[tl(flags, default_flags = 0x40000000)]
         flags: (),
         #[tl(flags_bit = 0)]
         value_1: Option<u32>,
@@ -124,7 +124,7 @@ mod tests {
         };
         assert_eq!(object.max_size_hint(), 4 + 4);
         let target = [
-            0u8, 0, 0, 0x80, // flags
+            0u8, 0, 0, 0b11000000, // flags
             181, 117, 114, 153, // value_2: Some
         ];
         let data = tl_proto::serialize(object);

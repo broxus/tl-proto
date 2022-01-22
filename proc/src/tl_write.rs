@@ -251,7 +251,13 @@ fn build_write_to<F>(
 where
     F: FnMut(&ast::Field) -> TokenStream,
 {
-    let fields_checks = std::iter::once(quote! { 0u32 })
+    let default_flags = fields
+        .iter()
+        .filter_map(|field| field.attrs.default_flags)
+        .next()
+        .unwrap_or_default();
+
+    let fields_checks = std::iter::once(quote! { #default_flags })
         .chain(fields.iter().filter_map(|field| {
             field.attrs.flags_bit.map(|flags_bit| {
                 let field_name = build_field(field);

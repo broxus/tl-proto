@@ -106,7 +106,7 @@ where
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = u32::read_from(packet, offset)? as usize;
 
-        // Length can't be greater then the rest of the packet.
+        // Length cannot be greater than the rest of the packet.
         // However min item size is 4 bytes so we could reduce it four times
         if unlikely((len + *offset) > packet.len() >> 2) {
             return Err(TlError::UnexpectedEof);

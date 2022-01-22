@@ -123,6 +123,7 @@ pub struct Field {
     pub size_hint: Option<SizeHint>,
     pub flags: bool,
     pub flags_bit: Option<u8>,
+    pub default_flags: Option<u32>,
     pub skip_write: bool,
     pub skip_read: bool,
     pub signature: bool,
@@ -133,6 +134,7 @@ impl Field {
         let mut size_hint = Attr::none(cx, SIZE_HINT);
         let mut flags = BoolAttr::none(cx, FLAGS);
         let mut flags_bit = Attr::none(cx, FLAGS_BIT);
+        let mut default_flags = Attr::none(cx, DEFAULT_FLAGS);
         let mut skip = BoolAttr::none(cx, SKIP);
         let mut skip_write = BoolAttr::none(cx, SKIP_WRITE);
         let mut skip_read = BoolAttr::none(cx, SKIP_READ);
@@ -159,6 +161,11 @@ impl Field {
                 Meta(NameValue(m)) if m.path == FLAGS_BIT => {
                     if let Ok(n) = get_lit_number(cx, FLAGS_BIT, &m.lit) {
                         flags_bit.set(&m.path, n);
+                    }
+                }
+                Meta(NameValue(m)) if m.path == DEFAULT_FLAGS => {
+                    if let Ok(n) = get_lit_number(cx, DEFAULT_FLAGS, &m.lit) {
+                        default_flags.set(&m.path, n);
                     }
                 }
                 // Parse `#[tl(skip)]`
@@ -199,6 +206,7 @@ impl Field {
             size_hint: size_hint.get(),
             flags: flags.get(),
             flags_bit: flags_bit.get(),
+            default_flags: default_flags.get(),
             skip_write: skip.get() || skip_write.get(),
             skip_read: skip.get() || skip_read.get(),
             signature: signature.get(),

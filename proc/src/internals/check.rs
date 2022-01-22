@@ -115,8 +115,12 @@ where
 fn check_flags(cx: &Ctxt, container: &Container) {
     let check_fields = |cx: &Ctxt, fields: &[Field]| {
         let mut has_flags_field = false;
+        let mut default_flags = None;
+
         for field in fields {
             if field.attrs.flags {
+                default_flags = field.attrs.default_flags;
+
                 if has_flags_field {
                     cx.error_spanned_by(
                         field.original,
@@ -150,6 +154,13 @@ fn check_flags(cx: &Ctxt, container: &Container) {
                 }
 
                 has_flags_field = true;
+            } else {
+                if field.attrs.default_flags.is_some() {
+                    cx.error_spanned_by(
+                        field.original,
+                        "#[tl(default_flags)] can only be used on the field with #[tl(flags)]",
+                    );
+                }
             }
 
             if let Some(flags_bit) = field.attrs.flags_bit {
@@ -166,6 +177,18 @@ fn check_flags(cx: &Ctxt, container: &Container) {
                         field.original,
                         "#[tl(flags_bit = ...)] bit index output of range",
                     )
+                }
+
+                if let Some(default_flags) = default_flags {
+                    if default_flags & (0x1 << flags_bit) != 0 {
+                        cx.error_spanned_by(
+                            field.original,
+                            format!(
+                                "flags bit {} is already set by default flags (0x{:08x})",
+                                flags_bit, default_flags
+                            ),
+                        )
+                    }
                 }
             }
         }
