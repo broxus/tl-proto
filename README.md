@@ -68,16 +68,16 @@ fn main() {
 
 ### Specification
 
-- `i32`, `u32` - 4 bytes in little-endian order.
-- `i64`, `u64` - 8 bytes in little-endian order.
-- `true` - `0x997275b5` as 4 bytes in little-endian order.
-- `false` - `0xbc799737` as 4 bytes in little-endian order.
-- Fixed bytes array of length `N` (where `N % 4 == 0`) - `N` bytes as it is.
-- Bytes array of arbitrary length (`<254`) - 1 byte with length, bytes from array, 
-  padding up to a length multiple of 4.
-- Bytes array of arbitrary length (`≥254`) - 1 byte with value `254`, 3 bytes of length in little-endian order, 
-  bytes from array, padding up to a length multiple of 4.
-- Vector of values with the same type - 4 bytes of length in little-endian order, values one by one.
-- Tuples - values one by one.
-- Enums (boxed types) - 4 bytes of type id in little-endian order, variant value
-  (btw. you can read more about how type id is calculated in telegram docs).
+| Type | Pseudocode |
+| -------- | -------- |
+| `()` | `[]` |
+| `i32`,`u32`,`i64`,`u64` | `little_endian(x)` |
+| `true` | `[0xb5, 0x75, 0x72, 0x99]` |
+| `false` | `[0x37, 0x97, 0x79, 0xbc]` 
+| `[u8; N], N % 4 ≡ 0`) | `[…x]` |
+| `Vec<u8>, len < 254`) | <code>[len as u8, …x, …padding_to_4(len)]</code> |
+| `Vec<u8>, len ≥ 254`) | <code>[254, …little_endian(x)[0..=2], …x, …padding_to_4(len)]</code> |
+| `Vec<T>` | `[…little_endian(len as u32), …map(…x, repr)]` |
+| `(T0, … , Tn)` | `[…repr(T0), … , …repr(Tn)]`  |
+| `Option<T>` | `{ Some(x) ⇒ repr(x), None ⇒ [] }` |
+| `enum { T0, …, Tn }` | `{ T0(x) ⇒ […id(T0), …repr(x)], …, Tn(x) ⇒ […id(Tn), …repr(x)] }` |
