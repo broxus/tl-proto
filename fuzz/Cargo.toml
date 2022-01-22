@@ -1,0 +1,25 @@
+[package]
+name = "tl-proto-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+smallvec = { version = "1.8", features = ["const_generics", "union"] }
+
+[dependencies.tl-proto]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "deserialize"
+path = "fuzz_targets/deserialize.rs"
+test = false
+doc = false
