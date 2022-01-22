@@ -105,6 +105,13 @@ where
 {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = u32::read_from(packet, offset)? as usize;
+
+        // Length can't be greater then the rest of the packet.
+        // However min item size is 4 bytes so we could reduce it four times
+        if unlikely((len + *offset) > packet.len() >> 2) {
+            return Err(TlError::UnexpectedEof);
+        }
+
         let mut items = Vec::with_capacity(len);
         for _ in 0..len {
             items.push(TlRead::read_from(packet, offset)?);
@@ -274,7 +281,7 @@ fn read_fixed_bytes<'a, const N: usize>(
     packet: &'a [u8],
     offset: &mut usize,
 ) -> TlResult<&'a [u8; N]> {
-    if packet.len() < *offset + N {
+    if unlikely(packet.len() < *offset + N) {
         Err(TlError::UnexpectedEof)
     } else {
         let ptr = unsafe { &*(packet.as_ptr().add(*offset) as *const [u8; N]) };
@@ -336,7 +343,7 @@ fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
     let packet_len = packet.len();
     let current_offset = *offset;
 
-    if packet_len <= current_offset {
+    if unlikely(packet_len <= current_offset) {
         return Err(TlError::UnexpectedEof);
     }
 
@@ -363,7 +370,7 @@ fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
         }
     };
 
-    if packet_len < current_offset + have_read + len + remainder {
+    if unlikely(packet_len < current_offset + have_read + len + remainder) {
         return Err(TlError::UnexpectedEof);
     }
 
@@ -372,4 +379,15 @@ fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
 
     *offset += have_read + len + remainder;
     Ok(result)
+}
+
+/// Brings [unlikely](core::intrinsics::unlikely) to stable rust.
+#[inline(always)]
+const fn unlikely(b: bool) -> bool {
+    #[allow(clippy::needless_bool)]
+    if (1i32).checked_div(if b { 0 } else { 1 }).is_none() {
+        true
+    } else {
+        false
+    }
 }
