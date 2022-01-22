@@ -89,7 +89,8 @@ where
     <[T; N] as smallvec::Array>::Item: TlRead<'a>,
 {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let len = u32::read_from(packet, offset)? as usize;
+        let len = read_vector_len(packet, offset)?;
+
         let mut items = SmallVec::<[T; N]>::with_capacity(len);
         for _ in 0..len {
             items.push(TlRead::read_from(packet, offset)?);
@@ -104,13 +105,7 @@ where
     T: TlRead<'a>,
 {
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let len = u32::read_from(packet, offset)? as usize;
-
-        // Length cannot be greater than the rest of the packet.
-        // However min item size is 4 bytes so we could reduce it four times
-        if unlikely((len + *offset) > packet.len() >> 2) {
-            return Err(TlError::UnexpectedEof);
-        }
+        let len = read_vector_len(packet, offset)?;
 
         let mut items = Vec::with_capacity(len);
         for _ in 0..len {
@@ -273,6 +268,19 @@ impl TlWrite for OwnedRawBytes {
         P: TlPacket,
     {
         packet.write_raw_slice(self.0.as_slice())
+    }
+}
+
+#[inline(always)]
+fn read_vector_len(packet: &[u8], offset: &mut usize) -> TlResult<usize> {
+    let len = u32::read_from(packet, offset)? as usize;
+
+    // Length cannot be greater than the rest of the packet.
+    // However min item size is 4 bytes so we could reduce it four times
+    if unlikely((len + *offset) > packet.len() >> 2) {
+        Err(TlError::UnexpectedEof)
+    } else {
+        Ok(len)
     }
 }
 
