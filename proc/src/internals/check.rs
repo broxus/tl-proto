@@ -154,13 +154,11 @@ fn check_flags(cx: &Ctxt, container: &Container) {
                 }
 
                 has_flags_field = true;
-            } else {
-                if field.attrs.default_flags.is_some() {
-                    cx.error_spanned_by(
-                        field.original,
-                        "#[tl(default_flags)] can only be used on the field with #[tl(flags)]",
-                    );
-                }
+            } else if field.attrs.default_flags.is_some() {
+                cx.error_spanned_by(
+                    field.original,
+                    "#[tl(default_flags)] can only be used on the field with #[tl(flags)]",
+                );
             }
 
             if let Some(flags_bit) = field.attrs.flags_bit {
