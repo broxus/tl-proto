@@ -8,19 +8,15 @@ impl<T> HashWrapper<T>
 where
     T: TlWrite,
 {
-    // TODO: use `&mut dyn digest::Update` when `digest 0.10` will be available to use
     #[inline(always)]
-    pub fn update_hasher<H: digest::Update>(&self, engine: &mut H) {
+    pub fn update_hasher(&self, engine: &mut dyn digest::Update) {
         self.0.write_to(&mut DigestWriter(engine));
     }
 }
 
-struct DigestWriter<'a, T>(&'a mut T);
+struct DigestWriter<'a>(&'a mut dyn digest::Update);
 
-impl<T> TlPacket for DigestWriter<'_, T>
-where
-    T: digest::Update,
-{
+impl TlPacket for DigestWriter<'_> {
     const TARGET: TlTarget = TlTarget::Hasher;
 
     #[inline(always)]
@@ -58,12 +54,9 @@ where
     }
 }
 
-struct HashWriter<T>(pub T);
+struct HashWriter<'a>(pub &'a mut dyn Hasher);
 
-impl<T> TlPacket for HashWriter<T>
-where
-    T: Hasher,
-{
+impl<'a> TlPacket for HashWriter<'a> {
     const TARGET: TlTarget = TlTarget::Hasher;
 
     #[inline(always)]
