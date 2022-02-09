@@ -88,11 +88,33 @@ fn check_size_hints(cx: &Ctxt, container: &Container) {
         Data::Enum(variants) => {
             for variant in variants {
                 check_size_hint(cx, variant.original, &variant.attrs.size_hint);
+
+                if matches!(
+                    variant.attrs.size_hint,
+                    Some(attr::SizeHint::Explicit { value }) if value > 0
+                ) && variant.fields.is_empty()
+                {
+                    cx.error_spanned_by(
+                        variant.original,
+                        "a unit variant cannot have a non-zero size hint",
+                    );
+                }
             }
         }
         Data::Struct(_, fields) => {
             for field in fields {
                 check_size_hint(cx, field.original, &field.attrs.size_hint);
+            }
+
+            if matches!(
+                container.attrs.size_hint,
+                Some(attr::SizeHint::Explicit { value }) if value > 0
+            ) && fields.is_empty()
+            {
+                cx.error_spanned_by(
+                    container.original,
+                    "an empty struct cannot have a non-zero size hint",
+                );
             }
         }
     }

@@ -57,15 +57,22 @@ fn build_enum(container: &ast::Container, variants: &[ast::Variant]) -> TokenStr
             }
         }
         None if !variants.is_empty() => {
-            let variants = map_variants(container, variants, |destructed, variant| {
-                let body = build_max_size_hint(
-                    &variant.fields,
-                    build_field,
-                    &variant.attrs.size_hint,
-                    container.attrs.boxed,
-                );
-                quote! { #destructed => #body }
-            });
+            let variants = map_variants(
+                container,
+                variants,
+                |variant, field| {
+                    variant.attrs.size_hint.is_none() && field.attrs.size_hint.is_none()
+                },
+                |destructed, variant| {
+                    let body = build_max_size_hint(
+                        &variant.fields,
+                        build_field,
+                        &variant.attrs.size_hint,
+                        container.attrs.boxed,
+                    );
+                    quote! { #destructed => #body }
+                },
+            );
 
             quote! {
                 match self {
@@ -77,15 +84,20 @@ fn build_enum(container: &ast::Container, variants: &[ast::Variant]) -> TokenStr
     };
 
     let write_to = if !variants.is_empty() {
-        let variants = map_variants(container, variants, |destructed, variant| {
-            let body = build_write_to(
-                &variant.fields,
-                build_field,
-                container.attrs.boxed,
-                variant.attrs.id,
-            );
-            quote! { #destructed => { #body } }
-        });
+        let variants = map_variants(
+            container,
+            variants,
+            |_, _| true,
+            |destructed, variant| {
+                let body = build_write_to(
+                    &variant.fields,
+                    build_field,
+                    container.attrs.boxed,
+                    variant.attrs.id,
+                );
+                quote! { #destructed => { #body } }
+            },
+        );
 
         quote! {
             match self {
@@ -110,12 +122,14 @@ fn build_enum(container: &ast::Container, variants: &[ast::Variant]) -> TokenStr
     }
 }
 
-fn map_variants<'a, F>(
+fn map_variants<'a, P, F>(
     container: &'a ast::Container,
     variants: &'a [ast::Variant],
+    mut filter_fields: P,
     mut f: F,
 ) -> impl Iterator<Item = TokenStream> + 'a
 where
+    P: FnMut(&'a ast::Variant, &'a ast::Field) -> bool + 'a,
     F: FnMut(TokenStream, &'a ast::Variant) -> TokenStream + 'a,
 {
     variants.iter().map(move |variant| {
@@ -128,7 +142,7 @@ where
                     .fields
                     .iter()
                     .filter_map(|field| {
-                        if field.attrs.skip_write {
+                        if field.attrs.skip_write || !filter_fields(variant, field) {
                             skip_rest = true;
                             return None;
                         }
@@ -140,11 +154,15 @@ where
 
                 let skip_rest = skip_rest.then(|| quote! { .. });
 
-                quote! {
-                    #ident::#variant_name {
-                        #(#fields),*,
-                        #skip_rest
-                    }
+                match (fields.is_empty(), skip_rest.is_some()) {
+                    (false, _) => quote! {
+                        #ident::#variant_name {
+                            #(#fields),*,
+                            #skip_rest
+                        }
+                    },
+                    (true, true) => quote! { #ident::#variant_name { .. } },
+                    (true, false) => quote! { #ident::#variant_name },
                 }
             }
             ast::Style::Tuple => {

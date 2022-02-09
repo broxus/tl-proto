@@ -30,6 +30,17 @@ mod tests {
     }
 
     #[derive(TlWrite)]
+    #[tl(boxed)]
+    enum EnumWithSizeHint {
+        #[tl(id = 1, size_hint = 0)]
+        Struct,
+        #[tl(id = 2, size_hint = 8)]
+        Struct3 { first: u64 },
+        #[tl(id = 3)]
+        Struct2 { first: u32, second: u64 },
+    }
+
+    #[derive(TlWrite)]
     #[tl(boxed, id = 0xffffffff)]
     struct SimpleStruct {
         #[tl(size_hint = 4)]
