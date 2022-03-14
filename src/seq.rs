@@ -306,12 +306,8 @@ fn bytes_max_size_hint(mut len: usize) -> usize {
         len += 4;
     }
 
-    let remainder = len % 4;
-    if remainder != 0 {
-        len += 4 - remainder;
-    }
-
-    len
+    // Align to 4
+    len + (4 - len % 4) % 4
 }
 
 #[inline(always)]
@@ -355,28 +351,29 @@ fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
         return Err(TlError::UnexpectedEof);
     }
 
-    let first_bytes = packet[current_offset];
+    // SAFETY: `current_offset` is guaranteed to be less than `packet_len`
+    // but the compiler is not able to eliminate bounds check
+    let first_bytes = unsafe { *packet.get_unchecked(current_offset) };
     let (len, have_read) = if first_bytes != 254 {
         (first_bytes as usize, 1)
     } else {
-        if packet_len < current_offset + 4 {
+        if packet_len <= current_offset + 3 {
             return Err(TlError::UnexpectedEof);
         }
 
-        let mut len = packet[current_offset + 1] as usize;
-        len |= (packet[current_offset + 2] as usize) << 8;
-        len |= (packet[current_offset + 3] as usize) << 16;
+        let mut len;
+
+        // SAFETY: `current_offset + 3` is guaranteed to be less than `packet_len`
+        unsafe {
+            len = *packet.get_unchecked(current_offset + 1) as usize;
+            len |= (*packet.get_unchecked(current_offset + 2) as usize) << 8;
+            len |= (*packet.get_unchecked(current_offset + 3) as usize) << 16;
+        }
+
         (len, 4)
     };
 
-    let remainder = {
-        let excess = (have_read + len) % 4;
-        if excess == 0 {
-            0
-        } else {
-            4 - excess
-        }
-    };
+    let remainder = (4 - (have_read + len) % 4) % 4;
 
     if unlikely(packet_len < current_offset + have_read + len + remainder) {
         return Err(TlError::UnexpectedEof);
