@@ -49,7 +49,9 @@ enum Address<'tl> {
     },
 }
 
-fn main() {    
+fn main() {
+    assert_eq!(PublicKey::TL_ID_AES, 0x2dbcadd4);
+    
     let bytes = tl_proto::serialize(&Address::Udp {
         ip: 123,
         port: 3000,
