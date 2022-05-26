@@ -43,6 +43,8 @@ mod tests {
 
     #[test]
     fn correct_deserialization() {
+        assert_eq!(BoxedEnum::TL_ID_FIRST, 0x1);
+
         let target = [
             0, 0, 0, 0x80, // flags
             181, 117, 114, 153, // value_2: Some
