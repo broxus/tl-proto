@@ -82,8 +82,6 @@ where
 {
     const NOT_BOXED_WRITE: () = if T::TL_WRITE_BOXED {
         panic!("Boxed writer can only be used for bare types")
-    } else {
-        ()
     };
 }
 
@@ -93,7 +91,5 @@ where
 {
     const NOT_BOXED_READ: () = if T::TL_READ_BOXED {
         panic!("Boxed reader can only be used for bare types")
-    } else {
-        ()
     };
 }
