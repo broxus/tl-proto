@@ -1,6 +1,7 @@
 #[cfg(feature = "derive")]
 pub use tl_proto_proc::*;
 
+pub use self::boxed::*;
 pub use self::hasher::*;
 pub use self::seq::*;
 pub use self::traits::*;

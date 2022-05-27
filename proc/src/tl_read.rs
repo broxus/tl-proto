@@ -37,12 +37,16 @@ pub fn impl_derive_tl_read(input: syn::DeriveInput) -> Result<TokenStream, Vec<s
         ),
     };
 
+    let boxed = container.attrs.boxed;
+
     let result = quote! {
         impl #impl_generics #ident #ty_generics #where_clause {
             #ids
         }
 
         impl #impl_generics _tl_proto::TlRead<'tl> for #ident #ty_generics #where_clause {
+            const TL_READ_BOXED: bool = #boxed;
+
             #body
         }
     };

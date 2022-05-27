@@ -51,6 +51,10 @@ mod tests {
         _unknown: u8,
     }
 
+    impl tl_proto::BoxedConstructor for SimpleStruct {
+        const TL_ID: u32 = 0xffffffff;
+    }
+
     #[derive(TlWrite)]
     struct InnerStruct {
         what: bool,
@@ -98,7 +102,7 @@ mod tests {
             0xb5, 0x75, 0x72, 0x99, // InnerStruct.what
             123, 0, 0, 0, // on_heap
         ];
-        let data = tl_proto::serialize(object);
+        let data = tl_proto::serialize(&object);
         assert_eq!(&data, &target);
 
         // 2

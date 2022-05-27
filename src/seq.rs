@@ -4,6 +4,8 @@ use crate::traits::*;
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl<'a> TlRead<'a> for &'a [u8] {
+    const TL_READ_BOXED: bool = false;
+
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         read_bytes(packet, offset)
@@ -12,6 +14,8 @@ impl<'a> TlRead<'a> for &'a [u8] {
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl TlWrite for &[u8] {
+    const TL_WRITE_BOXED: bool = false;
+
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
         bytes_max_size_hint(self.len())
@@ -28,6 +32,8 @@ impl TlWrite for &[u8] {
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl<'a> TlRead<'a> for Vec<u8> {
+    const TL_READ_BOXED: bool = false;
+
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         Ok(read_bytes(packet, offset)?.to_vec())
@@ -36,6 +42,8 @@ impl<'a> TlRead<'a> for Vec<u8> {
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl TlWrite for Vec<u8> {
+    const TL_WRITE_BOXED: bool = false;
+
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
         bytes_max_size_hint(self.len())
@@ -52,6 +60,8 @@ impl TlWrite for Vec<u8> {
 
 /// `ton::int128 | ton::int256` - N bytes of data
 impl<'a, const N: usize> TlRead<'a> for &'a [u8; N] {
+    const TL_READ_BOXED: bool = false;
+
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         read_fixed_bytes(packet, offset)
@@ -60,6 +70,8 @@ impl<'a, const N: usize> TlRead<'a> for &'a [u8; N] {
 
 /// `ton::int128 | ton::int256` - N bytes of data
 impl<'a, const N: usize> TlRead<'a> for [u8; N] {
+    const TL_READ_BOXED: bool = false;
+
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         read_fixed_bytes(packet, offset).map(|&t| t)
@@ -68,6 +80,8 @@ impl<'a, const N: usize> TlRead<'a> for [u8; N] {
 
 /// `ton::int128 | ton::int256` - N bytes of data
 impl<const N: usize> TlWrite for [u8; N] {
+    const TL_WRITE_BOXED: bool = false;
+
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
         N
@@ -88,6 +102,8 @@ where
     [T; N]: smallvec::Array,
     <[T; N] as smallvec::Array>::Item: TlRead<'a>,
 {
+    const TL_READ_BOXED: bool = false;
+
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = read_vector_len(packet, offset)?;
 
@@ -104,6 +120,8 @@ impl<'a, T> TlRead<'a> for Vec<T>
 where
     T: TlRead<'a>,
 {
+    const TL_READ_BOXED: bool = false;
+
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = read_vector_len(packet, offset)?;
 
@@ -120,6 +138,8 @@ impl<T> TlWrite for &[T]
 where
     T: TlWrite,
 {
+    const TL_WRITE_BOXED: bool = false;
+
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
         4 + self.iter().map(TlWrite::max_size_hint).sum::<usize>()
@@ -143,6 +163,8 @@ where
     [T; N]: smallvec::Array,
     <[T; N] as smallvec::Array>::Item: TlWrite,
 {
+    const TL_WRITE_BOXED: bool = false;
+
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
         self.as_slice().max_size_hint()
@@ -174,6 +196,8 @@ impl<'a, T> TlRead<'a> for IntermediateBytes<T>
 where
     T: TlRead<'a>,
 {
+    const TL_READ_BOXED: bool = false;
+
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let intermediate = read_bytes(packet, offset)?;
         T::read_from(intermediate, &mut 0).map(IntermediateBytes)
@@ -184,6 +208,8 @@ impl<T> TlWrite for IntermediateBytes<T>
 where
     T: TlWrite,
 {
+    const TL_WRITE_BOXED: bool = false;
+
     fn max_size_hint(&self) -> usize {
         bytes_max_size_hint(self.0.max_size_hint())
     }
@@ -217,6 +243,8 @@ impl AsRef<[u8]> for RawBytes<'_> {
 }
 
 impl<'a> TlRead<'a> for RawBytes<'a> {
+    const TL_READ_BOXED: bool = false;
+
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = packet.len() - std::cmp::min(*offset, packet.len());
         let result = unsafe { std::slice::from_raw_parts(packet.as_ptr().add(*offset), len) };
@@ -226,6 +254,8 @@ impl<'a> TlRead<'a> for RawBytes<'a> {
 }
 
 impl TlWrite for RawBytes<'_> {
+    const TL_WRITE_BOXED: bool = false;
+
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
         self.0.len()
@@ -251,12 +281,16 @@ impl AsRef<[u8]> for OwnedRawBytes {
 }
 
 impl TlRead<'_> for OwnedRawBytes {
+    const TL_READ_BOXED: bool = false;
+
     fn read_from(packet: &'_ [u8], offset: &mut usize) -> TlResult<Self> {
         Ok(Self(RawBytes::read_from(packet, offset)?.0.to_vec()))
     }
 }
 
 impl TlWrite for OwnedRawBytes {
+    const TL_WRITE_BOXED: bool = false;
+
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
         self.0.len()

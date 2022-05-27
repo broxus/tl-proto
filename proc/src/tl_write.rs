@@ -21,8 +21,12 @@ pub fn impl_derive_tl_write(input: syn::DeriveInput) -> Result<TokenStream, Vec<
         ast::Data::Struct(_, fields) => build_struct(&container, fields),
     };
 
+    let boxed = container.attrs.boxed;
+
     let result = quote! {
         impl #impl_generics _tl_proto::TlWrite for #ident #ty_generics #where_clause {
+            const TL_WRITE_BOXED: bool = #boxed;
+
             #body
         }
     };

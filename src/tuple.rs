@@ -7,6 +7,8 @@ macro_rules! impl_traits_for_tuple {
         where
             $($ty: TlRead<'a>),*
         {
+            const TL_READ_BOXED: bool = false;
+
             #[inline(always)]
             fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
                 Ok(($($ty::read_from(packet, offset)?),*,))
@@ -17,6 +19,8 @@ macro_rules! impl_traits_for_tuple {
         where
             $($ty: TlWrite),*
         {
+            const TL_WRITE_BOXED: bool = false;
+
             #[inline(always)]
             fn max_size_hint(&self) -> usize {
                 let mut result = 0;
