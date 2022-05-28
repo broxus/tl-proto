@@ -44,7 +44,7 @@ where
     where
         P: TlPacket,
     {
-        let _ = Assert::<T>::NOT_BOXED_WRITE;
+        let _ = TlAssert::<T>::NOT_BOXED_WRITE;
 
         T::TL_ID.write_to(packet);
         self.0.write_to(packet);
@@ -64,7 +64,7 @@ where
     const TL_READ_BOXED: bool = true;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let _ = Assert::<T>::NOT_BOXED_READ;
+        let _ = TlAssert::<T>::NOT_BOXED_READ;
 
         if u32::read_from(packet, offset)? == T::TL_ID {
             T::read_from(packet, offset).map(BoxedReader)
@@ -74,22 +74,30 @@ where
     }
 }
 
-struct Assert<T>(std::marker::PhantomData<T>);
+pub struct TlAssert<T>(std::marker::PhantomData<T>);
 
-impl<'a, T> Assert<T>
+impl<'a, T> TlAssert<T>
 where
     T: TlWrite,
 {
-    const NOT_BOXED_WRITE: () = if T::TL_WRITE_BOXED {
-        panic!("Boxed writer can only be used for bare types")
+    pub const BOXED_WRITE: () = if !T::TL_WRITE_BOXED {
+        panic!("Type must be boxed for write")
+    };
+
+    pub const NOT_BOXED_WRITE: () = if T::TL_WRITE_BOXED {
+        panic!("Type must be bare for write")
     };
 }
 
-impl<'a, T> Assert<T>
+impl<'a, T> TlAssert<T>
 where
     T: TlRead<'a>,
 {
-    const NOT_BOXED_READ: () = if T::TL_READ_BOXED {
-        panic!("Boxed reader can only be used for bare types")
+    pub const BOXED_READ: () = if !T::TL_READ_BOXED {
+        panic!("Type must be boxed for read")
+    };
+
+    pub const NOT_BOXED_READ: () = if T::TL_READ_BOXED {
+        panic!("Type must be bare for read")
     };
 }

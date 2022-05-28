@@ -2,6 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::traits::*;
 
+#[derive(Eq, PartialEq)]
 pub struct HashWrapper<T>(pub T);
 
 impl<T> HashWrapper<T>

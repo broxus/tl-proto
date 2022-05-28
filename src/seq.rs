@@ -134,6 +134,27 @@ where
 }
 
 /// `ton::vector` - 4 bytes of `len`, then `len` items
+impl<T> TlWrite for Vec<T>
+where
+    T: TlWrite,
+{
+    const TL_WRITE_BOXED: bool = false;
+
+    #[inline(always)]
+    fn max_size_hint(&self) -> usize {
+        <&[T]>::max_size_hint(&self.as_slice())
+    }
+
+    #[inline(always)]
+    fn write_to<P>(&self, packet: &mut P)
+    where
+        P: TlPacket,
+    {
+        <&[T]>::write_to(&self.as_slice(), packet)
+    }
+}
+
+/// `ton::vector` - 4 bytes of `len`, then `len` items
 impl<T> TlWrite for &[T]
 where
     T: TlWrite,

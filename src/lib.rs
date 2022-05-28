@@ -65,7 +65,7 @@ where
 }
 
 #[cfg(feature = "hash")]
-pub fn hash<T>(data: T) -> digest::Output<sha2::Sha256>
+pub fn hash<T>(data: T) -> [u8; 32]
 where
     T: TlWrite,
 {
@@ -73,12 +73,12 @@ where
 
     let mut hasher = sha2::Sha256::new();
     HashWrapper(data).update_hasher(&mut hasher);
-    hasher.finalize()
+    hasher.finalize().into()
 }
 
 #[cfg(feature = "hash")]
 #[inline(always)]
-pub fn hash_as_boxed<T>(data: T) -> digest::Output<sha2::Sha256>
+pub fn hash_as_boxed<T>(data: T) -> [u8; 32]
 where
     T: TlWrite + BoxedConstructor,
 {
