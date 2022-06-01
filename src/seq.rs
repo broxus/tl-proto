@@ -255,16 +255,16 @@ where
 
 /// Helper type which reads remaining packet as is
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct RawBytes<'a>(pub &'a [u8]);
+pub struct RawBytes<'a, const BOXED: bool = false>(pub &'a [u8]);
 
-impl AsRef<[u8]> for RawBytes<'_> {
+impl<const BOXED: bool> AsRef<[u8]> for RawBytes<'_, BOXED> {
     fn as_ref(&self) -> &[u8] {
         self.0
     }
 }
 
-impl<'a> TlRead<'a> for RawBytes<'a> {
-    const TL_READ_BOXED: bool = false;
+impl<'a, const BOXED: bool> TlRead<'a> for RawBytes<'a, BOXED> {
+    const TL_READ_BOXED: bool = BOXED;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = packet.len() - std::cmp::min(*offset, packet.len());
@@ -274,8 +274,8 @@ impl<'a> TlRead<'a> for RawBytes<'a> {
     }
 }
 
-impl TlWrite for RawBytes<'_> {
-    const TL_WRITE_BOXED: bool = false;
+impl<const BOXED: bool> TlWrite for RawBytes<'_, BOXED> {
+    const TL_WRITE_BOXED: bool = BOXED;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -293,24 +293,26 @@ impl TlWrite for RawBytes<'_> {
 
 /// Owned version of `RawBytes`
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct OwnedRawBytes(pub Vec<u8>);
+pub struct OwnedRawBytes<const BOXED: bool = false>(pub Vec<u8>);
 
-impl AsRef<[u8]> for OwnedRawBytes {
+impl<const BOXED: bool> AsRef<[u8]> for OwnedRawBytes<BOXED> {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
 }
 
-impl TlRead<'_> for OwnedRawBytes {
-    const TL_READ_BOXED: bool = false;
+impl<const BOXED: bool> TlRead<'_> for OwnedRawBytes<BOXED> {
+    const TL_READ_BOXED: bool = BOXED;
 
     fn read_from(packet: &'_ [u8], offset: &mut usize) -> TlResult<Self> {
-        Ok(Self(RawBytes::read_from(packet, offset)?.0.to_vec()))
+        Ok(Self(
+            RawBytes::<BOXED>::read_from(packet, offset)?.0.to_vec(),
+        ))
     }
 }
 
-impl TlWrite for OwnedRawBytes {
-    const TL_WRITE_BOXED: bool = false;
+impl<const BOXED: bool> TlWrite for OwnedRawBytes<BOXED> {
+    const TL_WRITE_BOXED: bool = BOXED;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {

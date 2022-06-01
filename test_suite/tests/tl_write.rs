@@ -51,10 +51,6 @@ mod tests {
         _unknown: u8,
     }
 
-    impl tl_proto::BoxedConstructor for SimpleStruct {
-        const TL_ID: u32 = 0xffffffff;
-    }
-
     #[derive(TlWrite)]
     struct InnerStruct {
         what: bool,
