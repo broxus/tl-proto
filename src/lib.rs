@@ -24,9 +24,9 @@ where
 #[inline(always)]
 pub fn deserialize_as_boxed<'a, T>(packet: &'a [u8]) -> TlResult<T>
 where
-    T: TlRead<'a> + BoxedConstructor,
+    T: TlRead<'a, Repr = Bare> + BoxedConstructor,
 {
-    let BoxedReader(result) = deserialize(packet)?;
+    let BoxedWrapper(result) = deserialize(packet)?;
     Ok(result)
 }
 
@@ -42,9 +42,9 @@ where
 #[inline(always)]
 pub fn serialize_as_boxed<T>(data: T) -> Vec<u8>
 where
-    T: TlWrite + BoxedConstructor,
+    T: TlWrite<Repr = Bare> + BoxedConstructor,
 {
-    serialize(data.into_boxed_writer())
+    serialize(data.into_boxed())
 }
 
 pub fn serialize_into<T>(data: T, buffer: &mut Vec<u8>)
@@ -59,15 +59,15 @@ where
 #[inline(always)]
 pub fn serialize_into_as_boxed<T>(data: T, buffer: &mut Vec<u8>)
 where
-    T: TlWrite + BoxedConstructor,
+    T: TlWrite<Repr = Bare> + BoxedConstructor,
 {
-    serialize_into(data.into_boxed_writer(), buffer);
+    serialize_into(data.into_boxed(), buffer);
 }
 
 #[cfg(feature = "hash")]
 pub fn hash<T>(data: T) -> [u8; 32]
 where
-    T: TlWrite,
+    T: TlWrite<Repr = Boxed>,
 {
     use digest::Digest;
 
@@ -80,7 +80,7 @@ where
 #[inline(always)]
 pub fn hash_as_boxed<T>(data: T) -> [u8; 32]
 where
-    T: TlWrite + BoxedConstructor,
+    T: TlWrite<Repr = Bare> + BoxedConstructor,
 {
-    hash(data.into_boxed_writer())
+    hash(data.into_boxed())
 }

@@ -1,7 +1,7 @@
 use crate::traits::*;
 
 impl TlRead<'_> for bool {
-    const TL_READ_BOXED: bool = true;
+    type Repr = Boxed;
 
     fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
         match u32::read_from(packet, offset)? {
@@ -13,7 +13,7 @@ impl TlRead<'_> for bool {
 }
 
 impl TlWrite for bool {
-    const TL_WRITE_BOXED: bool = true;
+    type Repr = Boxed;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -32,7 +32,7 @@ impl TlWrite for bool {
 macro_rules! impl_read_from_packet(
     ($ty:ty) => {
         impl TlRead<'_> for $ty {
-            const TL_READ_BOXED: bool = false;
+            type Repr = Bare;
 
             #[inline(always)]
             fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
@@ -53,7 +53,7 @@ macro_rules! impl_read_from_packet(
 impl_read_from_packet!(u32);
 
 impl TlWrite for u32 {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -72,7 +72,7 @@ impl TlWrite for u32 {
 impl_read_from_packet!(i32);
 
 impl TlWrite for i32 {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -91,7 +91,7 @@ impl TlWrite for i32 {
 impl_read_from_packet!(u64);
 
 impl TlWrite for u64 {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -110,7 +110,7 @@ impl TlWrite for u64 {
 impl_read_from_packet!(i64);
 
 impl TlWrite for i64 {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -129,7 +129,7 @@ impl TlWrite for i64 {
 impl_read_from_packet!(f64);
 
 impl TlWrite for f64 {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {

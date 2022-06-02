@@ -1,8 +1,26 @@
 use std::sync::Arc;
 
+/// Serialized object representation
+///
+/// - [`Boxed`] - object with explicit type id. Can be used for enums or dynamic dispatch.
+/// - [`Bare`] - object without explicit type id. Can only be used for structs, or write-only enums.
+pub trait Repr: private::Sealed {}
+
+/// Object representation with explicit type id.
+/// Can be used for enums or dynamic dispatch.
+pub enum Boxed {}
+impl private::Sealed for Boxed {}
+impl Repr for Boxed {}
+
+/// Object representation without explicit type id.
+/// Can only be used for structs, or write-only enums.
+pub enum Bare {}
+impl private::Sealed for Bare {}
+impl Repr for Bare {}
+
 /// Specifies how this type can read from the packet
 pub trait TlRead<'a>: Sized {
-    const TL_READ_BOXED: bool;
+    type Repr: Repr;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self>;
 }
@@ -11,7 +29,7 @@ impl<'a, T> TlRead<'a> for Arc<T>
 where
     T: TlRead<'a>,
 {
-    const TL_READ_BOXED: bool = T::TL_READ_BOXED;
+    type Repr = T::Repr;
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
@@ -23,7 +41,7 @@ impl<'a, T> TlRead<'a> for Box<T>
 where
     T: TlRead<'a>,
 {
-    const TL_READ_BOXED: bool = T::TL_READ_BOXED;
+    type Repr = T::Repr;
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
@@ -33,7 +51,7 @@ where
 
 /// Specifies how this type can be written to the packet
 pub trait TlWrite {
-    const TL_WRITE_BOXED: bool;
+    type Repr: Repr;
 
     /// Max required number of bytes
     fn max_size_hint(&self) -> usize;
@@ -47,7 +65,7 @@ impl<T> TlWrite for &T
 where
     T: TlWrite,
 {
-    const TL_WRITE_BOXED: bool = T::TL_WRITE_BOXED;
+    type Repr = T::Repr;
 
     fn max_size_hint(&self) -> usize {
         TlWrite::max_size_hint(*self)
@@ -66,7 +84,7 @@ impl<T> TlWrite for Box<T>
 where
     T: TlWrite,
 {
-    const TL_WRITE_BOXED: bool = T::TL_WRITE_BOXED;
+    type Repr = T::Repr;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -86,7 +104,7 @@ impl<T> TlWrite for Arc<T>
 where
     T: TlWrite,
 {
-    const TL_WRITE_BOXED: bool = T::TL_WRITE_BOXED;
+    type Repr = T::Repr;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -186,4 +204,8 @@ pub enum TlError {
     UnexpectedEof,
     #[error("Unknown constructor")]
     UnknownConstructor,
+}
+
+mod private {
+    pub trait Sealed {}
 }

@@ -5,7 +5,7 @@ impl<T> TlWrite for Option<T>
 where
     T: TlWrite,
 {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = T::Repr;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {

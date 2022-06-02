@@ -4,7 +4,7 @@ use crate::traits::*;
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl<'a> TlRead<'a> for &'a [u8] {
-    const TL_READ_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
@@ -14,7 +14,7 @@ impl<'a> TlRead<'a> for &'a [u8] {
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl TlWrite for &[u8] {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -32,7 +32,7 @@ impl TlWrite for &[u8] {
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl<'a> TlRead<'a> for Vec<u8> {
-    const TL_READ_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
@@ -42,7 +42,7 @@ impl<'a> TlRead<'a> for Vec<u8> {
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl TlWrite for Vec<u8> {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -60,7 +60,7 @@ impl TlWrite for Vec<u8> {
 
 /// `ton::int128 | ton::int256` - N bytes of data
 impl<'a, const N: usize> TlRead<'a> for &'a [u8; N] {
-    const TL_READ_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
@@ -70,7 +70,7 @@ impl<'a, const N: usize> TlRead<'a> for &'a [u8; N] {
 
 /// `ton::int128 | ton::int256` - N bytes of data
 impl<'a, const N: usize> TlRead<'a> for [u8; N] {
-    const TL_READ_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
@@ -80,7 +80,7 @@ impl<'a, const N: usize> TlRead<'a> for [u8; N] {
 
 /// `ton::int128 | ton::int256` - N bytes of data
 impl<const N: usize> TlWrite for [u8; N] {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -102,7 +102,7 @@ where
     [T; N]: smallvec::Array,
     <[T; N] as smallvec::Array>::Item: TlRead<'a>,
 {
-    const TL_READ_BOXED: bool = false;
+    type Repr = Bare;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = read_vector_len(packet, offset)?;
@@ -120,7 +120,7 @@ impl<'a, T> TlRead<'a> for Vec<T>
 where
     T: TlRead<'a>,
 {
-    const TL_READ_BOXED: bool = false;
+    type Repr = Bare;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = read_vector_len(packet, offset)?;
@@ -138,7 +138,7 @@ impl<T> TlWrite for Vec<T>
 where
     T: TlWrite,
 {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -159,7 +159,7 @@ impl<T> TlWrite for &[T]
 where
     T: TlWrite,
 {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -184,7 +184,7 @@ where
     [T; N]: smallvec::Array,
     <[T; N] as smallvec::Array>::Item: TlWrite,
 {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -217,7 +217,7 @@ impl<'a, T> TlRead<'a> for IntermediateBytes<T>
 where
     T: TlRead<'a>,
 {
-    const TL_READ_BOXED: bool = false;
+    type Repr = Bare;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let intermediate = read_bytes(packet, offset)?;
@@ -229,7 +229,7 @@ impl<T> TlWrite for IntermediateBytes<T>
 where
     T: TlWrite,
 {
-    const TL_WRITE_BOXED: bool = false;
+    type Repr = Bare;
 
     fn max_size_hint(&self) -> usize {
         bytes_max_size_hint(self.0.max_size_hint())
@@ -255,27 +255,38 @@ where
 
 /// Helper type which reads remaining packet as is
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct RawBytes<'a, const BOXED: bool = false>(pub &'a [u8]);
+pub struct RawBytes<'a, R>(&'a [u8], std::marker::PhantomData<R>);
 
-impl<const BOXED: bool> AsRef<[u8]> for RawBytes<'_, BOXED> {
+impl<'a, R> RawBytes<'a, R> {
+    pub fn new(raw: &'a [u8]) -> Self {
+        RawBytes(raw, std::marker::PhantomData)
+    }
+
+    #[inline(always)]
+    pub fn into_inner(self) -> &'a [u8] {
+        self.0
+    }
+}
+
+impl<R> AsRef<[u8]> for RawBytes<'_, R> {
     fn as_ref(&self) -> &[u8] {
         self.0
     }
 }
 
-impl<'a, const BOXED: bool> TlRead<'a> for RawBytes<'a, BOXED> {
-    const TL_READ_BOXED: bool = BOXED;
+impl<'a, R: Repr> TlRead<'a> for RawBytes<'a, R> {
+    type Repr = R;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
         let len = packet.len() - std::cmp::min(*offset, packet.len());
         let result = unsafe { std::slice::from_raw_parts(packet.as_ptr().add(*offset), len) };
         *offset += len;
-        Ok(Self(result))
+        Ok(Self::new(result))
     }
 }
 
-impl<const BOXED: bool> TlWrite for RawBytes<'_, BOXED> {
-    const TL_WRITE_BOXED: bool = BOXED;
+impl<R: Repr> TlWrite for RawBytes<'_, R> {
+    type Repr = R;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -293,26 +304,39 @@ impl<const BOXED: bool> TlWrite for RawBytes<'_, BOXED> {
 
 /// Owned version of `RawBytes`
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct OwnedRawBytes<const BOXED: bool = false>(pub Vec<u8>);
+pub struct OwnedRawBytes<R>(Vec<u8>, std::marker::PhantomData<R>);
 
-impl<const BOXED: bool> AsRef<[u8]> for OwnedRawBytes<BOXED> {
+impl<R> OwnedRawBytes<R> {
+    pub fn new(raw: Vec<u8>) -> Self {
+        OwnedRawBytes(raw, std::marker::PhantomData)
+    }
+
+    #[inline(always)]
+    pub fn into_inner(self) -> Vec<u8> {
+        self.0
+    }
+}
+
+impl<R> AsRef<[u8]> for OwnedRawBytes<R> {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
 }
 
-impl<const BOXED: bool> TlRead<'_> for OwnedRawBytes<BOXED> {
-    const TL_READ_BOXED: bool = BOXED;
+impl<R: Repr> TlRead<'_> for OwnedRawBytes<R> {
+    type Repr = R;
 
     fn read_from(packet: &'_ [u8], offset: &mut usize) -> TlResult<Self> {
-        Ok(Self(
-            RawBytes::<BOXED>::read_from(packet, offset)?.0.to_vec(),
+        Ok(Self::new(
+            RawBytes::<R>::read_from(packet, offset)?
+                .into_inner()
+                .to_vec(),
         ))
     }
 }
 
-impl<const BOXED: bool> TlWrite for OwnedRawBytes<BOXED> {
-    const TL_WRITE_BOXED: bool = BOXED;
+impl<R: Repr> TlWrite for OwnedRawBytes<R> {
+    type Repr = R;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {

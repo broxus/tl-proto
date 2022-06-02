@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::traits::*;
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq)]
 pub struct HashWrapper<T>(pub T);
 
 impl<T> HashWrapper<T>
@@ -13,6 +13,12 @@ where
     #[inline(always)]
     pub fn update_hasher<H: digest::Update>(&self, engine: &mut H) {
         self.0.write_to(&mut DigestWriter(engine));
+    }
+}
+
+impl<T: PartialEq> PartialEq for HashWrapper<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
     }
 }
 

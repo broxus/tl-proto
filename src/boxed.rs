@@ -4,14 +4,14 @@ use crate::traits::*;
 pub trait BoxedConstructor: Sized {
     const TL_ID: u32;
 
-    /// Wraps bare type reference into `BoxedWriter`
-    fn boxed_writer(&self) -> BoxedWriter<&Self> {
-        BoxedWriter(self)
+    /// Wraps bare type reference into `BoxedWrapper`
+    fn as_boxed(&self) -> BoxedWrapper<&Self> {
+        BoxedWrapper(self)
     }
 
-    /// Converts bare type into `BoxedWriter`
-    fn into_boxed_writer(self) -> BoxedWriter<Self> {
-        BoxedWriter(self)
+    /// Converts bare type into `BoxedWrapper`
+    fn into_boxed(self) -> BoxedWrapper<Self> {
+        BoxedWrapper(self)
     }
 }
 
@@ -26,13 +26,13 @@ where
 ///
 /// Used mostly for serialization, so can contain references
 #[derive(Debug, Clone)]
-pub struct BoxedWriter<T>(pub T);
+pub struct BoxedWrapper<T>(pub T);
 
-impl<T> TlWrite for BoxedWriter<T>
+impl<T> TlWrite for BoxedWrapper<T>
 where
-    T: BoxedConstructor + TlWrite,
+    T: BoxedConstructor + TlWrite<Repr = Bare>,
 {
-    const TL_WRITE_BOXED: bool = true;
+    type Repr = Boxed;
 
     #[inline(always)]
     fn max_size_hint(&self) -> usize {
@@ -44,60 +44,22 @@ where
     where
         P: TlPacket,
     {
-        let _ = TlAssert::<T>::NOT_BOXED_WRITE;
-
         T::TL_ID.write_to(packet);
         self.0.write_to(packet);
     }
 }
 
-/// Simple helper which contains inner value and constructor id.
-///
-/// Used mostly for serialization, so can contain references
-#[derive(Debug, Clone)]
-pub struct BoxedReader<T>(pub T);
-
-impl<'a, T> TlRead<'a> for BoxedReader<T>
+impl<'a, T> TlRead<'a> for BoxedWrapper<T>
 where
-    T: BoxedConstructor + TlRead<'a>,
+    T: BoxedConstructor + TlRead<'a, Repr = Bare>,
 {
-    const TL_READ_BOXED: bool = true;
+    type Repr = Boxed;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let _ = TlAssert::<T>::NOT_BOXED_READ;
-
         if u32::read_from(packet, offset)? == T::TL_ID {
-            T::read_from(packet, offset).map(BoxedReader)
+            T::read_from(packet, offset).map(BoxedWrapper)
         } else {
             Err(TlError::UnknownConstructor)
         }
     }
-}
-
-pub struct TlAssert<T>(std::marker::PhantomData<T>);
-
-impl<'a, T> TlAssert<T>
-where
-    T: TlWrite,
-{
-    pub const BOXED_WRITE: () = if !T::TL_WRITE_BOXED {
-        panic!("Type must be boxed for write")
-    };
-
-    pub const NOT_BOXED_WRITE: () = if T::TL_WRITE_BOXED {
-        panic!("Type must be bare for write")
-    };
-}
-
-impl<'a, T> TlAssert<T>
-where
-    T: TlRead<'a>,
-{
-    pub const BOXED_READ: () = if !T::TL_READ_BOXED {
-        panic!("Type must be boxed for read")
-    };
-
-    pub const NOT_BOXED_READ: () = if T::TL_READ_BOXED {
-        panic!("Type must be bare for read")
-    };
 }
