@@ -254,7 +254,6 @@ where
 }
 
 /// Helper type which reads remaining packet as is
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct RawBytes<'a, R>(&'a [u8], std::marker::PhantomData<R>);
 
 impl<'a, R> RawBytes<'a, R> {
@@ -271,6 +270,26 @@ impl<'a, R> RawBytes<'a, R> {
 impl<R> AsRef<[u8]> for RawBytes<'_, R> {
     fn as_ref(&self) -> &[u8] {
         self.0
+    }
+}
+
+impl<R> std::fmt::Debug for RawBytes<'_, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("RawBytes").field(&self.0).finish()
+    }
+}
+
+impl<R> Eq for RawBytes<'_, R> {}
+impl<R> PartialEq for RawBytes<'_, R> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(other.0)
+    }
+}
+
+impl<R> Copy for RawBytes<'_, R> {}
+impl<R> Clone for RawBytes<'_, R> {
+    fn clone(&self) -> Self {
+        Self(self.0, std::marker::PhantomData)
     }
 }
 
@@ -302,8 +321,6 @@ impl<R: Repr> TlWrite for RawBytes<'_, R> {
     }
 }
 
-/// Owned version of `RawBytes`
-#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct OwnedRawBytes<R>(Vec<u8>, std::marker::PhantomData<R>);
 
 impl<R> OwnedRawBytes<R> {
@@ -314,6 +331,25 @@ impl<R> OwnedRawBytes<R> {
     #[inline(always)]
     pub fn into_inner(self) -> Vec<u8> {
         self.0
+    }
+}
+
+impl<R> std::fmt::Debug for OwnedRawBytes<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("OwnedRawBytes").field(&self.0).finish()
+    }
+}
+
+impl<R> Eq for OwnedRawBytes<R> {}
+impl<R> PartialEq for OwnedRawBytes<R> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl<R> Clone for OwnedRawBytes<R> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), std::marker::PhantomData)
     }
 }
 
