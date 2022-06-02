@@ -58,6 +58,34 @@ impl TlWrite for Vec<u8> {
     }
 }
 
+#[cfg(feature = "bytes")]
+impl TlRead<'_> for bytes::Bytes {
+    type Repr = Bare;
+
+    #[inline(always)]
+    fn read_from(packet: &'_ [u8], offset: &mut usize) -> TlResult<Self> {
+        Ok(read_bytes(packet, offset)?.to_vec().into())
+    }
+}
+
+#[cfg(feature = "bytes")]
+impl TlWrite for bytes::Bytes {
+    type Repr = Bare;
+
+    #[inline(always)]
+    fn max_size_hint(&self) -> usize {
+        bytes_max_size_hint(self.len())
+    }
+
+    #[inline(always)]
+    fn write_to<P>(&self, packet: &mut P)
+    where
+        P: TlPacket,
+    {
+        write_bytes(self, packet)
+    }
+}
+
 /// `ton::int128 | ton::int256` - N bytes of data
 impl<'a, const N: usize> TlRead<'a> for &'a [u8; N] {
     type Repr = Bare;
