@@ -204,6 +204,8 @@ pub enum TlError {
     UnexpectedEof,
     #[error("Unknown constructor")]
     UnknownConstructor,
+    #[error("Invalid data")]
+    InvalidData,
 }
 
 mod private {
