@@ -1,6 +1,6 @@
 #[allow(dead_code)]
 mod tests {
-    use tl_proto::TlWrite;
+    use tl_proto::{TlPacket, TlWrite};
 
     #[derive(TlWrite)]
     #[tl(boxed)]
@@ -79,6 +79,30 @@ mod tests {
         value_2: Option<bool>,
     }
 
+    #[derive(TlWrite)]
+    struct StructWithCustom {
+        #[tl(write_with = "write_f32", size_hint = 4)]
+        value: f32,
+        #[tl(with = "tl_u128")]
+        another: u128,
+    }
+
+    fn write_f32<P: TlPacket>(test: &f32, packet: &mut P) {
+        packet.write_u32(*test as u32);
+    }
+
+    mod tl_u128 {
+        use super::*;
+
+        pub const fn size_hint(_: &u128) -> usize {
+            16
+        }
+
+        pub fn write<P: TlPacket>(v: &u128, packet: &mut P) {
+            packet.write_raw_slice(&v.to_be_bytes())
+        }
+    }
+
     #[test]
     fn test_build() {}
 
@@ -140,5 +164,20 @@ mod tests {
         ];
         let data = tl_proto::serialize(object);
         assert_eq!(&data, &target);
+
+        // 5
+        let object = StructWithCustom {
+            value: 1.123,
+            another: 123,
+        };
+        assert_eq!(object.max_size_hint(), 4 + 16);
+        let data = tl_proto::serialize(object);
+        assert_eq!(
+            &data,
+            &[
+                1, 0, 0, 0, // value
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, // another
+            ]
+        );
     }
 }

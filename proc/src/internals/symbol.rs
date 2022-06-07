@@ -3,6 +3,10 @@ pub const TL: Symbol = Symbol("tl");
 pub const BOXED: Symbol = Symbol("boxed");
 pub const ID: Symbol = Symbol("id");
 
+pub const READ_WITH: Symbol = Symbol("read_with");
+pub const WRITE_WITH: Symbol = Symbol("write_with");
+pub const WITH: Symbol = Symbol("with");
+
 pub const SIZE_HINT: Symbol = Symbol("size_hint");
 
 pub const FLAGS: Symbol = Symbol("flags");

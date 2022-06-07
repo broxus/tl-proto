@@ -249,12 +249,18 @@ where
                 let fields = fields
                     .iter()
                     .filter(|field| !field.attrs.skip_write)
-                    .map(|field| match (field.attrs.flags, &field.attrs.size_hint) {
-                        (true, _) => quote! { 4usize },
-                        (false, Some(size_hint)) => build_size_hint(size_hint),
-                        (false, None) => {
-                            let field = build_field(field);
-                            quote! { #field.max_size_hint() }
+                    .map(|field| {
+                        match (field.attrs.flags, &field.attrs.size_hint, &field.attrs.with) {
+                            (true, _, _) => quote! { 4usize },
+                            (false, Some(size_hint), _) => build_size_hint(size_hint),
+                            (false, None, Some(with)) => {
+                                let field = build_field(field);
+                                quote! { #with::size_hint(&#field) }
+                            }
+                            (false, None, None) => {
+                                let field = build_field(field);
+                                quote! { #field.max_size_hint() }
+                            }
                         }
                     });
                 quote! { #(#fields)+* }
@@ -305,16 +311,26 @@ where
                 let field_name = build_field(field);
                 if field.attrs.flags {
                     quote! { <u32 as _tl_proto::TlWrite>::write_to::<P_>(&(#(#fields_checks)|*), __packet); }
-                } else if field.attrs.signature {
-                    quote! {
+                } else {
+                    let write_to = if let Some(with) = &field.attrs.with {
+                        quote! { #with::write(#field_name, __packet); }
+                    } else if let Some(write_with) = &field.attrs.write_with {
+                        quote! { #write_with(#field_name, __packet); }
+                    } else {
+                        quote! { _tl_proto::TlWrite::write_to::<P_>(#field_name, __packet); }
+                    };
+
+                    if field.attrs.signature {
+                        quote! {
                         if <P_ as _tl_proto::TlPacket>::TARGET == _tl_proto::TlTarget::Packet {
-                            _tl_proto::TlWrite::write_to::<P_>(#field_name, __packet);
+                            #write_to
                         } else {
                             <&[u8] as _tl_proto::TlWrite>::write_to::<P_>(&[].as_ref(), __packet);
                         }
                     }
-                } else {
-                    quote! { _tl_proto::TlWrite::write_to::<P_>(#field_name, __packet); }
+                    } else {
+                        write_to
+                    }
                 }
             }),
     );

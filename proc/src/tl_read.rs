@@ -175,14 +175,33 @@ fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]
             quote! { let #ident = Default::default(); }
         } else if let Some(flags_bit) = field.attrs.flags_bit {
             let mask = 0x1u32 << flags_bit;
+
+            let read = if let Some(with) = &field.attrs.with {
+                quote! { #with::read(__packet, __offset)? }
+            } else if let Some(read_with) = &field.attrs.read_with {
+                quote! { #read_with(__packet, __offset)? }
+            } else {
+                quote! {
+                    <<#ty as IntoIterator>::Item as _tl_proto::TlRead<'tl>>::read_from(
+                        __packet, __offset,
+                    )?
+                }
+            };
+
             quote! {
                 let #ident = if __flags & #mask != 0 {
-                    Some(<<#ty as IntoIterator>::Item as _tl_proto::TlRead<'tl>>::read_from(
-                        __packet, __offset,
-                    )?)
+                    Some(#read)
                 } else {
                     None
                 };
+            }
+        } else if let Some(with) = &field.attrs.with {
+            quote! {
+                let #ident = #with::read(__packet, __offset)?;
+            }
+        } else if let Some(read_with) = &field.attrs.read_with {
+            quote! {
+                let #ident = #read_with(__packet, __offset)?;
             }
         } else {
             quote! {

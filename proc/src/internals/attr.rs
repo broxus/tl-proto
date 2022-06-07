@@ -1,4 +1,4 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Group, Span, TokenStream, TokenTree};
 use quote::ToTokens;
 use syn::Meta::{List, NameValue, Path};
 use syn::NestedMeta::{Lit, Meta};
@@ -121,6 +121,9 @@ impl Variant {
 
 pub struct Field {
     pub size_hint: Option<SizeHint>,
+    pub read_with: Option<syn::Expr>,
+    pub write_with: Option<syn::Expr>,
+    pub with: Option<syn::Expr>,
     pub flags: bool,
     pub flags_bit: Option<u8>,
     pub default_flags: Option<u32>,
@@ -132,6 +135,9 @@ pub struct Field {
 impl Field {
     pub fn from_ast(cx: &Ctxt, field: &syn::Field) -> Self {
         let mut size_hint = Attr::none(cx, SIZE_HINT);
+        let mut read_with = Attr::none(cx, READ_WITH);
+        let mut write_with = Attr::none(cx, WRITE_WITH);
+        let mut with = Attr::none(cx, WITH);
         let mut flags = BoolAttr::none(cx, FLAGS);
         let mut flags_bit = Attr::none(cx, FLAGS_BIT);
         let mut default_flags = Attr::none(cx, DEFAULT_FLAGS);
@@ -151,6 +157,24 @@ impl Field {
                 Meta(NameValue(m)) if m.path == SIZE_HINT => {
                     if let Ok(h) = get_size_hint(cx, SIZE_HINT, &m.lit) {
                         size_hint.set(&m.path, h);
+                    }
+                }
+                // Parse `#[tl(read_with = "some_function"]`
+                Meta(NameValue(m)) if m.path == READ_WITH => {
+                    if let Ok(expr) = parse_lit_into_expr(cx, READ_WITH, &m.lit) {
+                        read_with.set(&m.path, expr);
+                    }
+                }
+                // Parse `#[tl(write_with = "some_function"]`
+                Meta(NameValue(m)) if m.path == WRITE_WITH => {
+                    if let Ok(expr) = parse_lit_into_expr(cx, WRITE_WITH, &m.lit) {
+                        write_with.set(&m.path, expr);
+                    }
+                }
+                // Parse `#[tl(with = "some_module"]`
+                Meta(NameValue(m)) if m.path == WITH => {
+                    if let Ok(expr) = parse_lit_into_expr(cx, WITH, &m.lit) {
+                        with.set(&m.path, expr);
                     }
                 }
                 // Parse `#[tl(flags)]`
@@ -202,9 +226,41 @@ impl Field {
             }
         }
 
+        let flags = flags.get();
+
+        let with = with.get();
+        let read_with = read_with.get();
+        let write_with = write_with.get();
+        let size_hint = size_hint.get();
+
+        match (&with, &read_with, &write_with, &size_hint) {
+            (Some(_), _, _, _) | (_, Some(_), _, _) | (_, _, Some(_), _) if flags => {
+                cx.error_spanned_by(
+                    field,
+                    "Attribute `flags` can't be used with `with`, `read_with` or `write_with`",
+                );
+            }
+            (Some(_), Some(_), _, _) | (Some(_), _, Some(_), _) | (Some(_), _, _, Some(_)) => {
+                cx.error_spanned_by(
+                    field,
+                    "Attribute `with` can't be used with attibutes `size_hint`, `read_with` or `write_with`",
+                );
+            }
+            (_, _, Some(_), None) => {
+                cx.error_spanned_by(
+                    field,
+                    "Attribute `write_with` requires attibute `size_hint`",
+                );
+            }
+            _ => {}
+        };
+
         Self {
-            size_hint: size_hint.get(),
-            flags: flags.get(),
+            size_hint,
+            read_with,
+            write_with,
+            with,
+            flags,
             flags_bit: flags_bit.get(),
             default_flags: default_flags.get(),
             skip_write: skip.get() || skip_write.get(),
@@ -246,6 +302,54 @@ fn get_size_hint(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<SizeHin
             );
             Err(())
         }
+    }
+}
+
+fn parse_lit_into_expr(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<syn::Expr, ()> {
+    let string = get_lit_str(cx, attr_name, lit)?;
+
+    parse_lit_str(string).map_err(|_| {
+        cx.error_spanned_by(lit, format!("failed to parse expr: {:?}", string.value()))
+    })
+}
+
+fn parse_lit_str<T>(s: &syn::LitStr) -> syn::parse::Result<T>
+where
+    T: syn::parse::Parse,
+{
+    let tokens = spanned_tokens(s)?;
+    syn::parse2(tokens)
+}
+
+fn spanned_tokens(s: &syn::LitStr) -> syn::parse::Result<TokenStream> {
+    let stream = syn::parse_str(&s.value())?;
+    Ok(respan_token_stream(stream, s.span()))
+}
+
+fn respan_token_stream(stream: TokenStream, span: Span) -> TokenStream {
+    stream
+        .into_iter()
+        .map(|token| respan_token_tree(token, span))
+        .collect()
+}
+
+fn respan_token_tree(mut token: TokenTree, span: Span) -> TokenTree {
+    if let TokenTree::Group(g) = &mut token {
+        *g = Group::new(g.delimiter(), respan_token_stream(g.stream(), span));
+    }
+    token.set_span(span);
+    token
+}
+
+fn get_lit_str<'a>(cx: &Ctxt, attr_name: Symbol, lit: &'a syn::Lit) -> Result<&'a syn::LitStr, ()> {
+    if let syn::Lit::Str(lit) = lit {
+        Ok(lit)
+    } else {
+        cx.error_spanned_by(
+            lit,
+            format!("expected {attr_name} attribute to be a string: `{attr_name} = \"...\"`",),
+        );
+        Err(())
     }
 }
 
