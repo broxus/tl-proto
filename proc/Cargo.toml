@@ -1,11 +1,12 @@
 [package]
 name = "tl-proto-proc"
 description = "A collection of traits for working with TL serialization/deserialization"
+authors = ["Ivan Kalinin <i.kalinin@dexpa.io>"]
 repository = "https://github.com/broxus/tl-proto"
 version = "0.3.3"
 edition = "2021"
-include = ["src/**/*.rs", "../README.md", "../LICENSE"]
-license-file = "../LICENSE"
+include = ["src/**/*.rs", "../README.md"]
+license = "MIT"
 
 [lib]
 proc-macro = true

@@ -1,0 +1,60 @@
+WHITESPACE = _{ " " | NEWLINE }
+COMMENT = _{
+    ("//" ~ ANY* ~ (NEWLINE | EOI) ) |
+    ("/*" ~ (!"*/" ~ ANY)* ~ "*/")
+}
+
+tl_scheme = _{
+    SOI ~ type_declarations ~ (
+        ("---" ~ "functions" ~ "---" ~ fn_declarations) |
+        ("---" ~ "types" ~ "---" ~ type_declarations)
+    )* ~ EOI
+}
+
+tl_constructor = _{
+    SOI ~ combinator_decl  ~ ";"? ~ EOI
+}
+
+type_declarations = { declaration* }
+fn_declarations = { declaration* }
+declaration = _{ (builtin_combinator_decl | combinator_decl) ~ ";" }
+
+builtin_combinator_decl = { variant ~ "?" ~ "=" ~ boxed_type_ident }
+combinator_decl = { variant ~ type_arg* ~ field* ~ "=" ~ result_type }
+
+type_arg = { "{" ~ field_ident ~ ":" ~ type_expr ~ "}" }
+
+field = { field_simple | field_repeated | type_expr }
+field_simple = { field_ident_opt ~ ":" ~ conditional_def? ~ type_expr }
+field_repeated = { (field_ident_opt ~ ":")? ~ (nat_const ~ "*")? ~ "[" ~ field* ~ "]" }
+
+conditional_def = { field_ident ~ "." ~ nat_const ~ "?" }
+
+result_type = { boxed_type_ident ~ type_expr? }
+
+variant = { lc_ident_ns ~ ("#" ~ variant_tl_id)? }
+variant_tl_id = @{ ASCII_HEX_DIGIT{8} }
+
+boxed_type_ident = @{ uc_ident_ns }
+
+field_ident_opt = @{ field_ident | "_" }
+field_ident = @{ lc_ident | uc_ident }
+
+type_expr = {
+    nat_type |
+    type_ident |
+    ( "(" ~ type_ident ~ type_expr ~ ")" ) |
+    ( type_ident ~ "<" ~ type_expr ~ ">" )
+}
+type_ident = @{ boxed_type_ident | lc_ident_ns }
+
+lc_ident_ns = @{ (namespace_ident ~ ".")* ~ lc_ident }
+uc_ident_ns = @{ (namespace_ident ~ ".")* ~ uc_ident }
+namespace_ident = @{ lc_ident }
+
+lc_ident = @{ ASCII_ALPHA_LOWER ~ ident_char* }
+uc_ident = @{ ASCII_ALPHA_UPPER ~ ident_char* }
+ident_char = @{ ASCII_ALPHANUMERIC | "_" }
+
+nat_type = @{ "#" }
+nat_const = @{ ASCII_DIGIT+ }
