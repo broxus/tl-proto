@@ -1,15 +1,16 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use super::{bound, dummy, Derive};
+use super::{bound, dummy, scheme_loader, Derive};
 use crate::internals::{ast, case, ctxt};
 
 pub fn impl_derive_tl_read(input: syn::DeriveInput) -> Result<TokenStream, Vec<syn::Error>> {
     let cx = ctxt::Ctxt::new();
-    let container = match ast::Container::from_ast(&cx, &input, Derive::Read) {
+    let mut container = match ast::Container::from_ast(&cx, &input, Derive::Read) {
         Some(container) => container,
         None => return Err(cx.check().unwrap_err()),
     };
+    scheme_loader::compute_tl_ids(&cx, &mut container);
     cx.check()?;
 
     let tl_lifetime: syn::LifetimeDef = syn::parse_quote!('tl);
@@ -71,7 +72,7 @@ fn build_generics(container: &ast::Container) -> syn::Generics {
 
 fn build_tl_ids_enum(variants: &[ast::Variant]) -> TokenStream {
     let ids = variants.iter().filter_map(|variant| {
-        let id = variant.attrs.id?;
+        let id = variant.attrs.id.as_ref()?.unwrap_explicit();
         let ident = quote::format_ident!(
             "TL_ID_{}",
             case::screaming_snake_case(&variant.ident.to_string())
@@ -86,9 +87,16 @@ fn build_tl_ids_enum(variants: &[ast::Variant]) -> TokenStream {
 }
 
 fn build_tl_ids_struct(container: &ast::Container) -> TokenStream {
-    let id = container.attrs.boxed.then(|| container.attrs.id).flatten();
+    let id = container
+        .attrs
+        .boxed
+        .then(|| container.attrs.id.as_ref())
+        .flatten();
     let id = id
-        .map(|id| quote! { pub const TL_ID: u32 = #id; })
+        .map(|id| {
+            let id = id.unwrap_explicit();
+            quote! { pub const TL_ID: u32 = #id; }
+        })
         .into_iter();
 
     quote! {
@@ -98,7 +106,7 @@ fn build_tl_ids_struct(container: &ast::Container) -> TokenStream {
 
 fn build_enum(variants: &[ast::Variant]) -> TokenStream {
     let variants = variants.iter().filter_map(|variant| {
-        let id = variant.attrs.id?;
+        let id = variant.attrs.id.as_ref()?.unwrap_explicit();
 
         let ident = &variant.ident;
         let read_from = build_read_from(quote! { Self::#ident }, &variant.style, &variant.fields);
@@ -124,9 +132,14 @@ fn build_struct(
     style: &ast::Style,
     fields: &[ast::Field],
 ) -> TokenStream {
-    let id = container.attrs.boxed.then(|| container.attrs.id).flatten();
+    let id = container
+        .attrs
+        .boxed
+        .then(|| container.attrs.id.as_ref())
+        .flatten();
     let prefix = id
         .map(|id| {
+            let id = id.unwrap_explicit();
             quote! {
                 if u32::read_from(__packet, __offset)? != #id {
                     return Err(_tl_proto::TlError::UnknownConstructor)

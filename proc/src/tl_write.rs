@@ -1,15 +1,16 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-use super::{bound, dummy, Derive};
+use super::{bound, dummy, scheme_loader, Derive};
 use crate::internals::{ast, attr, ctxt};
 
 pub fn impl_derive_tl_write(input: syn::DeriveInput) -> Result<TokenStream, Vec<syn::Error>> {
     let cx = ctxt::Ctxt::new();
-    let container = match ast::Container::from_ast(&cx, &input, Derive::Write) {
+    let mut container = match ast::Container::from_ast(&cx, &input, Derive::Write) {
         Some(container) => container,
         None => return Err(cx.check().unwrap_err()),
     };
+    scheme_loader::compute_tl_ids(&cx, &mut container);
     cx.check()?;
 
     let ident = &container.ident;
@@ -101,7 +102,7 @@ fn build_enum(container: &ast::Container, variants: &[ast::Variant]) -> TokenStr
                     &variant.fields,
                     build_field,
                     container.attrs.boxed,
-                    variant.attrs.id,
+                    &variant.attrs.id,
                 );
                 quote! { #destructed => { #body } }
             },
@@ -213,7 +214,7 @@ fn build_struct(container: &ast::Container, fields: &[ast::Field]) -> TokenStrea
             quote! { &self.#member }
         },
         container.attrs.boxed,
-        container.attrs.id,
+        &container.attrs.id,
     );
 
     quote! {
@@ -278,7 +279,7 @@ fn build_write_to<F>(
     fields: &[ast::Field],
     mut build_field: F,
     boxed: bool,
-    id: Option<u32>,
+    id: &Option<attr::TlId>,
 ) -> TokenStream
 where
     F: FnMut(&ast::Field) -> TokenStream,
@@ -298,9 +299,12 @@ where
         }))
         .collect::<Vec<_>>();
 
-    let id = boxed.then(|| id).flatten();
+    let id = boxed.then(|| id.as_ref()).flatten();
     let prefix = id
-        .map(|id: u32| quote! { _tl_proto::TlWrite::write_to::<P_>(&#id, __packet); })
+        .map(|id| {
+            let id = id.unwrap_explicit();
+            quote! { _tl_proto::TlWrite::write_to::<P_>(&#id, __packet); }
+        })
         .into_iter();
 
     let fields = prefix.chain(

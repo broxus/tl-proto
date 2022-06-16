@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use proc_macro2::{Group, Span, TokenStream, TokenTree};
 use quote::ToTokens;
 use syn::Meta::{List, NameValue, Path};
@@ -8,7 +10,8 @@ use super::symbol::*;
 
 pub struct Container {
     pub boxed: bool,
-    pub id: Option<u32>,
+    pub id: Option<TlId>,
+    pub scheme: Option<Scheme>,
     pub size_hint: Option<SizeHint>,
 }
 
@@ -16,6 +19,7 @@ impl Container {
     pub fn from_ast(cx: &Ctxt, item: &syn::DeriveInput) -> Self {
         let mut boxed = BoolAttr::none(cx, BOXED);
         let mut id = Attr::none(cx, ID);
+        let mut scheme = Attr::none(cx, SCHEME);
         let mut size_hint = Attr::none(cx, SIZE_HINT);
 
         for meta_item in item
@@ -29,10 +33,34 @@ impl Container {
                 Meta(Path(word)) if word == BOXED => {
                     boxed.set_true(word);
                 }
-                // Parse `#[tl(id = 0x123456)]`
+                // Parse `#[tl(id = 0x123456)]` or `#[tl(id = "boolTrue"]`
                 Meta(NameValue(m)) if m.path == ID => {
-                    if let Ok(n) = get_lit_number(cx, ID, &m.lit) {
+                    if let Ok(n) = get_tl_id(cx, ID, &m.lit) {
                         id.set(&m.path, n);
+                    }
+                }
+                // Parse `#[tl(scheme = "path/to/scheme.tl")]`
+                Meta(NameValue(m)) if m.path == SCHEME => {
+                    if let Ok(n) = get_lit_str(cx, SCHEME, &m.lit) {
+                        scheme.set(
+                            &m.path,
+                            Scheme {
+                                original: m.to_token_stream(),
+                                source: SchemeSource::File { path: n.clone() },
+                            },
+                        );
+                    }
+                }
+                // Parse `#[tl(scheme_inline = "boolTrue = Bool")]`
+                Meta(NameValue(m)) if m.path == SCHEME_INLINE => {
+                    if let Ok(n) = get_lit_str(cx, SCHEME_INLINE, &m.lit) {
+                        scheme.set(
+                            &m.path,
+                            Scheme {
+                                original: m.to_token_stream(),
+                                source: SchemeSource::Inline { content: n.clone() },
+                            },
+                        );
                     }
                 }
                 // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
@@ -61,13 +89,14 @@ impl Container {
         Self {
             boxed: boxed.get(),
             id: id.get(),
+            scheme: scheme.get(),
             size_hint: size_hint.get(),
         }
     }
 }
 
 pub struct Variant {
-    pub id: Option<u32>,
+    pub id: Option<TlId>,
     pub size_hint: Option<SizeHint>,
 }
 
@@ -83,9 +112,9 @@ impl Variant {
             .flatten()
         {
             match &meta_item {
-                // Parse `#[tl(id = 0x123456)]`
+                // Parse `#[tl(id = 0x123456)]` or `#[tl(id = "boolTrue"]`
                 Meta(NameValue(m)) if m.path == ID => {
-                    if let Ok(n) = get_lit_number(cx, ID, &m.lit) {
+                    if let Ok(n) = get_tl_id(cx, ID, &m.lit) {
                         id.set(&m.path, n);
                     }
                 }
@@ -270,6 +299,16 @@ impl Field {
     }
 }
 
+pub struct Scheme {
+    pub original: TokenStream,
+    pub source: SchemeSource,
+}
+
+pub enum SchemeSource {
+    File { path: syn::LitStr },
+    Inline { content: syn::LitStr },
+}
+
 pub enum SizeHint {
     Explicit { value: usize },
     Expression { expr: syn::Expr },
@@ -350,6 +389,61 @@ fn get_lit_str<'a>(cx: &Ctxt, attr_name: Symbol, lit: &'a syn::Lit) -> Result<&'
             format!("expected {attr_name} attribute to be a string: `{attr_name} = \"...\"`",),
         );
         Err(())
+    }
+}
+
+pub enum TlId {
+    Explicit { value: u32, lit: TokenStream },
+    FromScheme { value: String, lit: TokenStream },
+}
+
+impl TlId {
+    pub fn unwrap_explicit(&self) -> u32 {
+        match self {
+            TlId::Explicit { value, .. } => *value,
+            _ => panic!("Expected explicit tl id"),
+        }
+    }
+}
+
+impl Eq for TlId {}
+impl PartialEq for TlId {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Explicit { value, .. }, Self::Explicit { value: other, .. }) => value == other,
+            (Self::FromScheme { value, .. }, Self::FromScheme { value: other, .. }) => {
+                value == other
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Hash for TlId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Explicit { value, .. } => {
+                Hash::hash(&::core::mem::discriminant(self), state);
+                Hash::hash(value, state);
+            }
+            Self::FromScheme { value, .. } => {
+                Hash::hash(&::core::mem::discriminant(self), state);
+                Hash::hash(value, state);
+            }
+        }
+    }
+}
+
+fn get_tl_id(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<TlId, ()> {
+    match lit {
+        syn::Lit::Str(literal) => Ok(TlId::FromScheme {
+            value: literal.value().trim().to_string(),
+            lit: literal.to_token_stream(),
+        }),
+        lit => Ok(TlId::Explicit {
+            value: get_lit_number(cx, attr_name, lit)?,
+            lit: lit.to_token_stream(),
+        }),
     }
 }
 

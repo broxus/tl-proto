@@ -1,6 +1,6 @@
 WHITESPACE = _{ " " | NEWLINE }
 COMMENT = _{
-    ("//" ~ ANY* ~ (NEWLINE | EOI) ) |
+    ("//" ~ (!NEWLINE ~ ANY)*) |
     ("/*" ~ (!"*/" ~ ANY)* ~ "*/")
 }
 
@@ -20,7 +20,7 @@ fn_declarations = { declaration* }
 declaration = _{ (builtin_combinator_decl | combinator_decl) ~ ";" }
 
 builtin_combinator_decl = { variant ~ "?" ~ "=" ~ boxed_type_ident }
-combinator_decl = { variant ~ type_arg* ~ field* ~ "=" ~ result_type }
+combinator_decl = { variant ~ type_arg* ~ field* ~ "=" ~ output_type }
 
 type_arg = { "{" ~ field_ident ~ ":" ~ type_expr ~ "}" }
 
@@ -30,7 +30,7 @@ field_repeated = { (field_ident_opt ~ ":")? ~ (nat_const ~ "*")? ~ "[" ~ field* 
 
 conditional_def = { field_ident ~ "." ~ nat_const ~ "?" }
 
-result_type = { boxed_type_ident ~ type_expr? }
+output_type = { boxed_type_ident ~ type_expr? }
 
 variant = { lc_ident_ns ~ ("#" ~ variant_tl_id)? }
 variant_tl_id = @{ ASCII_HEX_DIGIT{8} }

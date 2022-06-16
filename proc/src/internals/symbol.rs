@@ -2,6 +2,8 @@ pub const TL: Symbol = Symbol("tl");
 
 pub const BOXED: Symbol = Symbol("boxed");
 pub const ID: Symbol = Symbol("id");
+pub const SCHEME: Symbol = Symbol("scheme");
+pub const SCHEME_INLINE: Symbol = Symbol("scheme_inline");
 
 pub const READ_WITH: Symbol = Symbol("read_with");
 pub const WRITE_WITH: Symbol = Symbol("write_with");

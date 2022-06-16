@@ -19,7 +19,7 @@ fn check_boxed(cx: &Ctxt, container: &Container, derive: Derive) {
             if container.attrs.id.is_some() {
                 cx.error_spanned_by(
                     container.original,
-                    "#[tl(id = 0x...)] is not allowed in an enum",
+                    "#[tl(id = ...)] is not allowed on a enum",
                 )
             }
 
@@ -37,28 +37,40 @@ fn check_boxed(cx: &Ctxt, container: &Container, derive: Derive) {
                 )
             }
 
+            if let Some(scheme) = &container.attrs.scheme {
+                if !container.attrs.boxed {
+                    cx.error_spanned_by(&scheme.original, "scheme does nothing for bare enums");
+                }
+            }
+
             let mut unique_ids = HashSet::new();
             for variant in variants {
                 if container.attrs.boxed && variant.attrs.id.is_none() {
                     cx.error_spanned_by(
                         variant.original,
-                        "#[tl(id = 0x...)] is required for boxed enum variant",
+                        "#[tl(id = ...)] is required for boxed enum variant",
                     )
                 }
 
                 if !must_be_boxed && !container.attrs.boxed && variant.attrs.id.is_some() {
                     cx.error_spanned_by(
                         variant.original,
-                        "#[tl(id = 0x...)] is not allowed for bare enum variant",
+                        "#[tl(id = ...)] is not allowed for bare enum variant",
                     )
                 }
 
-                if let Some(id) = variant.attrs.id {
+                if let Some(id) = &variant.attrs.id {
                     if !unique_ids.insert(id) {
                         cx.error_spanned_by(
                             variant.original,
-                            "duplicate value found for #[tl(id = 0x...)]",
+                            "duplicate id found for #[tl(id = ...)]",
                         )
+                    }
+
+                    if container.attrs.scheme.is_none() {
+                        if let attr::TlId::FromScheme { lit, .. } = id {
+                            cx.error_spanned_by(lit, "#[tl(scheme = ...)] is required for this id");
+                        }
                     }
                 }
             }
@@ -67,15 +79,21 @@ fn check_boxed(cx: &Ctxt, container: &Container, derive: Derive) {
             if container.attrs.boxed && container.attrs.id.is_none() {
                 cx.error_spanned_by(
                     container.original,
-                    "#[tl(id = 0x...)] is required for struct with #[tl(boxed)]",
+                    "#[tl(id = ...)] is required for struct with #[tl(boxed)]",
                 )
             }
 
             if !container.attrs.boxed && container.attrs.id.is_some() {
                 cx.error_spanned_by(
                     container.original,
-                    "#[tl(id = 0x...)] can't be used without #[tl(boxed)]",
+                    "#[tl(id = ...)] can't be used without #[tl(boxed)]",
                 )
+            }
+
+            if let Some(scheme) = &container.attrs.scheme {
+                if !container.attrs.boxed {
+                    cx.error_spanned_by(&scheme.original, "scheme does nothing for bare structs");
+                }
             }
         }
     }

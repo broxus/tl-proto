@@ -4,11 +4,24 @@ mod tests {
 
     #[derive(TlWrite)]
     #[tl(boxed)]
+    #[tl(scheme_inline = r##"
+        boolTrue = Bool;
+        boolFalse = Bool;
+    "##)]
     enum MyBool {
-        #[tl(id = 0x1)]
+        #[tl(id = "boolTrue")]
         Yes,
-        #[tl(id = 0x2)]
+        #[tl(id = "boolFalse")]
         No,
+    }
+
+    #[derive(TlWrite)]
+    #[tl(boxed, scheme = "test.tl")]
+    enum AdnlMessage {
+        #[tl(id = "adnl.message.query")]
+        Query { query_id: [u8; 32], query: Vec<u8> },
+        #[tl(id = "adnl.message.answer")]
+        Answer { query_id: [u8; 32], answer: Vec<u8> },
     }
 
     #[derive(TlWrite)]
@@ -108,6 +121,9 @@ mod tests {
 
     #[test]
     fn correct_serialization() {
+        assert_eq!(tl_proto::serialize(MyBool::Yes), tl_proto::serialize(true));
+        assert_eq!(tl_proto::serialize(MyBool::No), tl_proto::serialize(false));
+
         // 1
         let object = SimpleStruct {
             item: 0xad,

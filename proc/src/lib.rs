@@ -7,6 +7,7 @@ use self::tl_write::*;
 mod bound;
 mod dummy;
 mod internals;
+mod scheme_loader;
 mod tl_read;
 mod tl_write;
 
