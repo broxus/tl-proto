@@ -5,7 +5,7 @@ use pest::Parser;
 use rustc_hash::FxHashMap;
 
 use self::grammar::{Grammar, Rule};
-pub use self::tokens::{BuiltinConstructor, Constructor, Field, OutputType, Type};
+pub use self::tokens::{BuiltinConstructor, Constructor, ConstructorKind, Field, OutputType, Type};
 
 pub mod grammar;
 mod tokens;
@@ -20,18 +20,18 @@ pub struct Scheme<'a> {
 
 impl<'a> Scheme<'a> {
     /// Computes all TL ids in the scheme
-    pub fn compute_all_ids(&self) -> FxHashMap<u32, &Constructor<'a>> {
+    pub fn compute_all_ids(&self) -> FxHashMap<u32, (ConstructorKind, &Constructor<'a>)> {
         let mut ids = FxHashMap::with_capacity_and_hasher(
             self.types.len() + self.functions.len(),
             Default::default(),
         );
 
         for ty in self.types.values() {
-            ids.insert(ty.compute_tl_id(), ty);
+            ids.insert(ty.compute_tl_id(), (ConstructorKind::Type, ty));
         }
 
         for func in self.functions.values() {
-            ids.insert(func.compute_tl_id(), func);
+            ids.insert(func.compute_tl_id(), (ConstructorKind::Function, func));
         }
 
         ids
@@ -49,9 +49,13 @@ impl<'a> Scheme<'a> {
     }
 
     /// Finds a type variant or function with the given name
-    pub fn find_constructor(&self, name: &str) -> Option<&Constructor<'a>> {
-        self.get_type_variant(name)
-            .or_else(|| self.get_function(name))
+    pub fn find_constructor(&self, name: &str) -> Option<(ConstructorKind, &Constructor<'a>)> {
+        if let Some(constructor) = self.get_type_variant(name) {
+            Some((ConstructorKind::Type, constructor))
+        } else {
+            self.get_function(name)
+                .map(|constructor| (ConstructorKind::Function, constructor))
+        }
     }
 
     /// Finds type variant with the given name
@@ -71,11 +75,10 @@ impl<'a> Scheme<'a> {
         }
 
         if !self.boxed_types.contains_key(decl.output.ty)
-            && decl
+            && !decl
                 .type_parameters
                 .iter()
-                .find(|field| field.name == Some(decl.output.ty))
-                .is_none()
+                .any(|field| field.name == Some(decl.output.ty))
         {
             return Err(Error::UnknownType(decl.output.to_string()));
         }
@@ -97,20 +100,14 @@ impl<'a> Scheme<'a> {
             Type::Int => {}
             Type::Named { ty } => {
                 if !self.is_declared(ty)
-                    && type_parameters
-                        .iter()
-                        .find(|field| field.name == Some(ty))
-                        .is_none()
+                    && !type_parameters.iter().any(|field| field.name == Some(ty))
                 {
                     return Err(Error::UnknownType(ty.to_string()));
                 }
             }
             Type::Generic { ty, ty_param } => {
                 if !self.is_declared(ty)
-                    && type_parameters
-                        .iter()
-                        .find(|field| field.name == Some(ty))
-                        .is_none()
+                    && !type_parameters.iter().any(|field| field.name == Some(ty))
                 {
                     return Err(Error::UnknownType(ty.to_string()));
                 }
@@ -206,7 +203,7 @@ fn parse_declarations<'a>(scheme: &mut Scheme<'a>, pair: Pair<'a, Rule>) -> Resu
     Ok(())
 }
 
-fn parse_builtin_declaration<'a>(pair: Pair<'a, Rule>) -> Result<BuiltinConstructor<'a>, Error> {
+fn parse_builtin_declaration(pair: Pair<'_, Rule>) -> Result<BuiltinConstructor<'_>, Error> {
     let mut pairs = pair.into_inner();
 
     let (variant, tl_id) = pairs
@@ -226,7 +223,7 @@ fn parse_builtin_declaration<'a>(pair: Pair<'a, Rule>) -> Result<BuiltinConstruc
     })
 }
 
-fn parse_declaration<'a>(pair: Pair<'a, Rule>) -> Result<Constructor<'a>, Error> {
+fn parse_declaration(pair: Pair<'_, Rule>) -> Result<Constructor<'_>, Error> {
     let mut pairs = pair.into_inner();
 
     let (variant, tl_id) = pairs
@@ -236,12 +233,14 @@ fn parse_declaration<'a>(pair: Pair<'a, Rule>) -> Result<Constructor<'a>, Error>
 
     let mut type_parameters = Vec::new();
     read_same_rules(&mut pairs, Rule::type_arg, |pair| {
-        Ok(type_parameters.push(parse_type_arg(pair)?))
+        type_parameters.push(parse_type_arg(pair)?);
+        Ok(())
     })?;
 
     let mut fields = Vec::new();
     read_same_rules(&mut pairs, Rule::field, |pair| {
-        Ok(fields.push(parse_field(pair)?))
+        fields.push(parse_field(pair)?);
+        Ok(())
     })?;
 
     let output_type = pairs.next().ok_or(Error::ExpectedRule(Rule::output_type))?;
@@ -256,7 +255,7 @@ fn parse_declaration<'a>(pair: Pair<'a, Rule>) -> Result<Constructor<'a>, Error>
     })
 }
 
-fn parse_variant<'a>(pair: Pair<'a, Rule>) -> Result<(&'a str, Option<u32>), Error> {
+fn parse_variant(pair: Pair<'_, Rule>) -> Result<(&'_ str, Option<u32>), Error> {
     let mut pairs = pair.into_inner();
 
     let name = pairs.next().ok_or(Error::ExpectedRule(Rule::lc_ident_ns))?;
@@ -269,7 +268,7 @@ fn parse_variant<'a>(pair: Pair<'a, Rule>) -> Result<(&'a str, Option<u32>), Err
     Ok((name.as_str(), tl_id))
 }
 
-fn parse_type_arg<'a>(pair: Pair<'a, Rule>) -> Result<Field<'a>, Error> {
+fn parse_type_arg(pair: Pair<'_, Rule>) -> Result<Field<'_>, Error> {
     let mut pairs = pair.into_inner();
 
     let name = pairs.next().ok_or(Error::ExpectedRule(Rule::field_ident))?;
@@ -283,7 +282,7 @@ fn parse_type_arg<'a>(pair: Pair<'a, Rule>) -> Result<Field<'a>, Error> {
     })
 }
 
-fn parse_field<'a>(pair: Pair<'a, Rule>) -> Result<Field<'a>, Error> {
+fn parse_field(pair: Pair<'_, Rule>) -> Result<Field<'_>, Error> {
     let pair = pair
         .into_inner()
         .next()
@@ -350,9 +349,7 @@ fn parse_field<'a>(pair: Pair<'a, Rule>) -> Result<Field<'a>, Error> {
                 pairs.next();
             }
 
-            let ty = pairs
-                .map(|pair| parse_field(pair))
-                .collect::<Result<Vec<_>, _>>()?;
+            let ty = pairs.map(parse_field).collect::<Result<Vec<_>, _>>()?;
 
             Ok(Field {
                 name,
@@ -367,7 +364,7 @@ fn parse_field<'a>(pair: Pair<'a, Rule>) -> Result<Field<'a>, Error> {
     }
 }
 
-fn parse_output_type<'a>(pair: Pair<'a, Rule>) -> Result<OutputType<'a>, Error> {
+fn parse_output_type(pair: Pair<'_, Rule>) -> Result<OutputType<'_>, Error> {
     let mut pairs = pair.into_inner();
 
     let ty = pairs
@@ -380,7 +377,7 @@ fn parse_output_type<'a>(pair: Pair<'a, Rule>) -> Result<OutputType<'a>, Error> 
     Ok(OutputType { ty, ty_param })
 }
 
-fn parse_type_expr<'a>(pair: Pair<'a, Rule>) -> Result<Type<'a>, Error> {
+fn parse_type_expr(pair: Pair<'_, Rule>) -> Result<Type<'_>, Error> {
     if pair.as_rule() != Rule::type_expr {
         return Err(Error::ExpectedRule(Rule::type_expr));
     }

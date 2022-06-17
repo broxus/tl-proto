@@ -46,7 +46,7 @@ struct State<'s, 'a> {
     unique_ids: HashSet<u32>,
     all_ids: AllIds<'s, 'a>,
     all_ids_loaded: bool,
-    output: Option<tl_scheme::OutputType<'s>>,
+    output: Option<(tl_scheme::ConstructorKind, tl_scheme::OutputType<'s>)>,
 }
 
 impl<'s, 'a: 's> State<'s, 'a> {
@@ -54,21 +54,18 @@ impl<'s, 'a: 's> State<'s, 'a> {
         match id {
             Some(attr::TlId::FromScheme { value, lit }) => {
                 match self.scheme.find_constructor(value) {
-                    Some(constructor) => {
+                    Some((kind, constructor)) => {
                         let value = constructor.compute_tl_id();
 
                         self.check_id(cx, value, lit);
-                        check_constructor(&mut self.output, cx, constructor, lit);
+                        check_constructor(&mut self.output, cx, kind, constructor, lit);
 
                         *id = Some(attr::TlId::Explicit {
                             value,
                             lit: lit.to_token_stream(),
                         });
                     }
-                    None => {
-                        cx.error_spanned_by(lit, format!("unknown variant: {value}"));
-                        return;
-                    }
+                    None => cx.error_spanned_by(lit, format!("unknown variant: {value}")),
                 }
             }
             Some(attr::TlId::Explicit { value, lit }) => {
@@ -80,7 +77,9 @@ impl<'s, 'a: 's> State<'s, 'a> {
                 }
 
                 match self.all_ids.get(value) {
-                    Some(constructor) => check_constructor(&mut self.output, cx, constructor, lit),
+                    Some((kind, constructor)) => {
+                        check_constructor(&mut self.output, cx, *kind, constructor, lit)
+                    }
                     None => cx.error_spanned_by(lit, "unknown TL id"),
                 }
             }
@@ -96,20 +95,33 @@ impl<'s, 'a: 's> State<'s, 'a> {
 }
 
 fn check_constructor<'a, 's>(
-    output: &mut Option<tl_scheme::OutputType<'s>>,
+    output: &mut Option<(tl_scheme::ConstructorKind, tl_scheme::OutputType<'s>)>,
     cx: &ctxt::Ctxt,
+    kind: tl_scheme::ConstructorKind,
     constructor: &'s tl_scheme::Constructor<'a>,
     lit: &TokenStream,
 ) {
     match output {
-        Some(output) if output == &constructor.output => {}
-        Some(output) => {
-            cx.error_spanned_by(
-                lit,
-                format!("constructor output type mismatch. Expected: {output}"),
-            );
+        Some((output_kind, output)) => {
+            if *output_kind != kind {
+                cx.error_spanned_by(
+                    lit,
+                    format!(
+                        "constructor kind mismatch. Expected: {}. Got: {}",
+                        output_kind, kind
+                    ),
+                )
+            } else if kind == tl_scheme::ConstructorKind::Type && output != &constructor.output {
+                cx.error_spanned_by(
+                    lit,
+                    format!(
+                        "constructor output type mismatch. Expected: {}. Got: {}",
+                        output, constructor.output
+                    ),
+                );
+            }
         }
-        None => *output = Some(constructor.output.clone()),
+        None => *output = Some((kind, constructor.output.clone())),
     }
 }
 
@@ -145,4 +157,4 @@ fn read_file<P: AsRef<Path>>(path: P) -> std::io::Result<String> {
     Ok(string)
 }
 
-type AllIds<'a, 'b> = FxHashMap<u32, &'b tl_scheme::Constructor<'a>>;
+type AllIds<'a, 'b> = FxHashMap<u32, (tl_scheme::ConstructorKind, &'b tl_scheme::Constructor<'a>)>;

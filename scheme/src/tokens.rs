@@ -7,6 +7,21 @@ pub struct BuiltinConstructor<'a> {
     pub output: &'a str,
 }
 
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum ConstructorKind {
+    Type,
+    Function,
+}
+
+impl std::fmt::Display for ConstructorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConstructorKind::Type => write!(f, "type"),
+            ConstructorKind::Function => write!(f, "function"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Constructor<'a> {
     pub variant: &'a str,
