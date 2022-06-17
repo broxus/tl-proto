@@ -16,16 +16,18 @@ A collection of traits for working with [TL](https://core.telegram.org/mtproto/T
 ```text
 /* my_proto.tl */
 
+int ? = Int;
 string ? = String;
 bytes data:string = Bytes;
 
 int256 8*[ int ] = Int256;
 
-pub.unenc data:bytes = PublicKey;
 pub.ed25519 key:int256 = PublicKey;
 pub.aes key:int256 = PublicKey;
 pub.overlay name:bytes = PublicKey;
 ```
+
+> NOTE: TL scheme is parsed by [`tl-scheme`](./scheme) crate at compile time.
 
 ```rust
 use tl_proto::{TlRead, TlWrite};

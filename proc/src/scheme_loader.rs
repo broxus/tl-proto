@@ -14,10 +14,10 @@ pub fn compute_tl_ids(cx: &ctxt::Ctxt, container: &mut ast::Container) {
         Some(scheme) => scheme,
         None => return,
     };
-    let scheme = match tl_scheme::parse_scheme(&scheme) {
+    let scheme = match tl_scheme::Scheme::parse(&scheme) {
         Ok(scheme) => scheme,
         Err(e) => {
-            cx.error_spanned_by(lit, format!("invalid scheme: {e:#?}"));
+            cx.error_spanned_by(lit, format!("invalid scheme: {e:#}"));
             return;
         }
     };

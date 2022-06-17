@@ -1,5 +1,137 @@
 use crc::{Crc, CRC_32_ISO_HDLC};
+use rustc_hash::FxHashMap;
 
+/// Parsed scheme with all types and functions.
+#[derive(Debug, Clone, Default)]
+pub struct Scheme<'a> {
+    pub builtins: FxHashMap<&'a str, BuiltinConstructor<'a>>,
+    pub types: FxHashMap<&'a str, Constructor<'a>>,
+    pub boxed_types: FxHashMap<&'a str, Vec<&'a str>>,
+    pub functions: FxHashMap<&'a str, Constructor<'a>>,
+}
+
+impl<'a> Scheme<'a> {
+    /// Computes all TL ids in the scheme
+    pub fn compute_all_ids(&self) -> FxHashMap<u32, (ConstructorKind, &Constructor<'a>)> {
+        let mut ids = FxHashMap::with_capacity_and_hasher(
+            self.types.len() + self.functions.len(),
+            Default::default(),
+        );
+
+        for ty in self.types.values() {
+            ids.insert(ty.compute_tl_id(), (ConstructorKind::Type, ty));
+        }
+
+        for func in self.functions.values() {
+            ids.insert(func.compute_tl_id(), (ConstructorKind::Function, func));
+        }
+
+        ids
+    }
+
+    /// Resolves all types in the scheme
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        for ty in self.types.values() {
+            self.check_constructor(ty)?;
+        }
+        for func in self.functions.values() {
+            self.check_constructor(func)?;
+        }
+        Ok(())
+    }
+
+    /// Finds a type variant or function with the given name
+    pub fn find_constructor(&self, name: &str) -> Option<(ConstructorKind, &Constructor<'a>)> {
+        if let Some(constructor) = self.get_type_variant(name) {
+            Some((ConstructorKind::Type, constructor))
+        } else {
+            self.get_function(name)
+                .map(|constructor| (ConstructorKind::Function, constructor))
+        }
+    }
+
+    /// Finds type variant with the given name
+    pub fn get_type_variant(&self, name: &str) -> Option<&Constructor<'a>> {
+        self.types.get(name)
+    }
+
+    /// Finds function with the given name
+    pub fn get_function(&self, name: &str) -> Option<&Constructor<'a>> {
+        self.functions.get(name)
+    }
+
+    fn check_constructor(&self, decl: &Constructor<'a>) -> Result<(), ValidationError> {
+        for (i, field) in decl.fields.iter().enumerate() {
+            let prev_fields = &decl.fields[..i];
+            self.check_type(&field.ty, &decl.type_parameters, prev_fields)?;
+        }
+
+        if !self.boxed_types.contains_key(decl.output.ty)
+            && !decl
+                .type_parameters
+                .iter()
+                .any(|field| field.name == Some(decl.output.ty))
+        {
+            return Err(ValidationError::UnknownType(decl.output.to_string()));
+        }
+
+        if let Some(ty_param) = &decl.output.ty_param {
+            self.check_type(ty_param, &decl.type_parameters, &[])?;
+        }
+
+        Ok(())
+    }
+
+    fn check_type(
+        &self,
+        ty: &Type<'a>,
+        type_parameters: &[Field<'a>],
+        prev_fields: &[Field<'a>],
+    ) -> Result<(), ValidationError> {
+        match ty {
+            Type::Int => {}
+            Type::Named { ty } => {
+                if !self.is_declared(ty)
+                    && !type_parameters.iter().any(|field| field.name == Some(ty))
+                {
+                    return Err(ValidationError::UnknownType(ty.to_string()));
+                }
+            }
+            Type::Generic { ty, ty_param } => {
+                if !self.is_declared(ty)
+                    && !type_parameters.iter().any(|field| field.name == Some(ty))
+                {
+                    return Err(ValidationError::UnknownType(ty.to_string()));
+                }
+                self.check_type(ty_param, type_parameters, &[])?;
+            }
+            Type::Flagged {
+                flags_field, ty, ..
+            } => {
+                prev_fields
+                    .iter()
+                    .find(|field| field.name == Some(flags_field))
+                    .ok_or_else(|| ValidationError::UnknownField(flags_field.to_string()))?;
+                self.check_type(ty, type_parameters, prev_fields)?;
+            }
+            Type::Repeated { ty, .. } => {
+                for field in ty {
+                    self.check_type(&field.ty, type_parameters, prev_fields)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn is_declared(&self, ty: &str) -> bool {
+        self.types.contains_key(ty)
+            || self.boxed_types.contains_key(ty)
+            || self.builtins.contains_key(ty)
+    }
+}
+
+/// Predefined constructor
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct BuiltinConstructor<'a> {
     pub variant: &'a str,
@@ -22,6 +154,7 @@ impl std::fmt::Display for ConstructorKind {
     }
 }
 
+/// Type or function declaration
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Constructor<'a> {
     pub variant: &'a str,
@@ -163,6 +296,14 @@ impl std::fmt::Display for Type<'_> {
             }
         }
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ValidationError {
+    #[error("unknown field: {0}")]
+    UnknownField(String),
+    #[error("unknown type: {0}")]
+    UnknownType(String),
 }
 
 static CRC: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
