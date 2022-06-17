@@ -13,6 +13,20 @@ A collection of traits for working with [TL](https://core.telegram.org/mtproto/T
 
 ### Example
 
+```text
+/* my_proto.tl */
+
+string ? = String;
+bytes data:string = Bytes;
+
+int256 8*[ int ] = Int256;
+
+pub.unenc data:bytes = PublicKey;
+pub.ed25519 key:int256 = PublicKey;
+pub.aes key:int256 = PublicKey;
+pub.overlay name:bytes = PublicKey;
+```
+
 ```rust
 use tl_proto::{TlRead, TlWrite};
 
@@ -21,15 +35,15 @@ use tl_proto::{TlRead, TlWrite};
 struct HashRef<'tl>(&'tl [u8; 32]);
 
 #[derive(TlRead, TlWrite)]
-#[tl(boxed)]
+#[tl(boxed, scheme = "my_proto.tl")]
 enum PublicKey<'tl> {
-    #[tl(id = 0x2dbcadd4)]
+    #[tl(id = "pub.aes")]
     Aes { key: HashRef<'tl> },
 
-    #[tl(id = 0x4813b4c6)]
+    #[tl(id = "pub.ed25519", size_hint = 32)]
     Ed25519 { key: HashRef<'tl> },
 
-    #[tl(id = 0x34ba45cb)]
+    #[tl(id = "pub.overlay")]
     Overlay { name: &'tl [u8] },
 }
 
