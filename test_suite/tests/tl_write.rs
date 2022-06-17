@@ -1,8 +1,16 @@
 #[allow(dead_code)]
 mod tests {
-    use tl_proto::{TlPacket, TlWrite};
+    use tl_proto::{TlPacket, TlRead, TlWrite};
 
-    #[derive(TlWrite)]
+    const TEST_ID: u32 = tl_proto::id!(
+        "boolTrue",
+        scheme_inline = r##"
+            boolTrue = Bool;
+            boolfalse = Bool;
+        "##
+    );
+
+    #[derive(TlWrite, TlRead)]
     #[tl(boxed)]
     #[tl(scheme_inline = r##"
         boolTrue = Bool;
@@ -121,6 +129,7 @@ mod tests {
 
     #[test]
     fn correct_serialization() {
+        assert_eq!(MyBool::TL_ID_YES, TEST_ID);
         assert_eq!(tl_proto::serialize(MyBool::Yes), tl_proto::serialize(true));
         assert_eq!(tl_proto::serialize(MyBool::No), tl_proto::serialize(false));
 

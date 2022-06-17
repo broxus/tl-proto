@@ -8,6 +8,82 @@ use syn::NestedMeta::{Lit, Meta};
 use super::ctxt::*;
 use super::symbol::*;
 
+pub struct IdMacro {
+    pub id: TlId,
+    pub scheme: Scheme,
+}
+
+impl IdMacro {
+    pub fn from_ast(cx: &Ctxt, outer: &TokenStream, items: &[syn::NestedMeta]) -> Option<Self> {
+        let mut id = Attr::none(cx, ID);
+        let mut scheme = Attr::none(cx, SCHEME);
+
+        for meta_item in items {
+            match &meta_item {
+                // Parse `0x123456` or "boolTrue"`
+                Lit(lit) => {
+                    if let Ok(n) = get_tl_id_inline(cx, lit) {
+                        id.set(lit, n);
+                    }
+                }
+                // Parse `#[tl(scheme = "path/to/scheme.tl")]`
+                Meta(NameValue(m)) if m.path == SCHEME => {
+                    if let Ok(n) = get_lit_str(cx, SCHEME, &m.lit) {
+                        scheme.set(
+                            &m.path,
+                            Scheme {
+                                original: m.to_token_stream(),
+                                source: SchemeSource::File { path: n.clone() },
+                            },
+                        );
+                    }
+                }
+                // Parse `#[tl(scheme_inline = "boolTrue = Bool")]`
+                Meta(NameValue(m)) if m.path == SCHEME_INLINE => {
+                    if let Ok(n) = get_lit_str(cx, SCHEME_INLINE, &m.lit) {
+                        scheme.set(
+                            &m.path,
+                            Scheme {
+                                original: m.to_token_stream(),
+                                source: SchemeSource::Inline { content: n.clone() },
+                            },
+                        );
+                    }
+                }
+                Meta(meta_item) => {
+                    let path = meta_item
+                        .path()
+                        .into_token_stream()
+                        .to_string()
+                        .replace(' ', "");
+                    cx.error_spanned_by(meta_item.path(), format!("unknown attribute `{}`", path));
+                }
+            }
+        }
+
+        let id = match id.get() {
+            Some(id) => id,
+            None => {
+                cx.error_spanned_by(outer, "missing variant name");
+                return None;
+            }
+        };
+
+        let scheme = match scheme.get() {
+            Some(scheme) => scheme,
+            None => {
+                cx.error_spanned_by(
+                    outer,
+                    "missing scheme attribute. `scheme = \"path/to/scheme.tl\"`",
+                );
+                return None;
+            }
+        };
+
+        Some(IdMacro { id, scheme })
+    }
+}
+
 pub struct Container {
     pub boxed: bool,
     pub id: Option<TlId>,
@@ -444,6 +520,23 @@ fn get_tl_id(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<TlId, ()> {
             value: get_lit_number(cx, attr_name, lit)?,
             lit: lit.to_token_stream(),
         }),
+    }
+}
+
+fn get_tl_id_inline(cx: &Ctxt, lit: &syn::Lit) -> Result<TlId, ()> {
+    match lit {
+        syn::Lit::Str(literal) => Ok(TlId::FromScheme {
+            value: literal.value().trim().to_string(),
+            lit: literal.to_token_stream(),
+        }),
+        syn::Lit::Int(lit) => Ok(TlId::Explicit {
+            value: lit.base10_parse().map_err(|err| cx.syn_error(err))?,
+            lit: lit.to_token_stream(),
+        }),
+        lit => {
+            cx.error_spanned_by(lit, "expected integer value or string");
+            Err(())
+        }
     }
 }
 

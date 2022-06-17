@@ -1,5 +1,5 @@
 #[cfg(feature = "derive")]
-pub use tl_proto_proc::*;
+pub use tl_proto_proc::{id, TlRead, TlWrite};
 
 pub use self::boxed::*;
 pub use self::hasher::*;
