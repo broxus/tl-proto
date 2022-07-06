@@ -3,7 +3,7 @@ name = "tl-proto"
 description = "A collection of traits for working with TL serialization/deserialization"
 authors = ["Ivan Kalinin <i.kalinin@dexpa.io>"]
 repository = "https://github.com/broxus/tl-proto"
-version = "0.3.7"
+version = "0.3.8"
 edition = "2021"
 include = ["src/**/*.rs", "README.md"]
 license = "MIT"
@@ -18,7 +18,7 @@ sha2 = { version = "0.9.9", optional = true }
 smallvec = { version = "1.7", features = ["union", "const_generics"] }
 thiserror = "1.0"
 
-tl-proto-proc = { version = "=0.3.7", path = "proc", optional = true }
+tl-proto-proc = { version = "=0.3.8", path = "proc", optional = true }
 
 [features]
 default = ["derive", "bytes", "hash"]

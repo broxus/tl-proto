@@ -45,6 +45,7 @@ pub fn impl_derive_tl_read(input: syn::DeriveInput) -> Result<TokenStream, Vec<s
     };
 
     let result = quote! {
+        #[allow(clippy::extra_unused_lifetimes)]
         impl #impl_generics #ident #ty_generics #where_clause {
             #ids
         }
