@@ -173,16 +173,22 @@ impl tl_proto::BoxedConstructor for BlockId {
 struct LookupBlock {
     /// At first, there must be a field, marked with `flags` attribute.
     ///
-    /// NOTE 1: It must precede the fields that depend on it.
-    /// NOTE 2: At this moment you can only specify one such field. 
+    /// NOTE: It must precede the fields that depend on it.
     #[tl(flags)]
     mode: (),
     id: BlockId,
     /// Fields with `flags_bit` attribute must be `Option`s
     #[tl(flags_bit = 1)]
     lt: Option<u64>,
-    #[tl(flags_bit = 2)]
+    /// You can also explicitly specify the flags field
+    /// (e.g. when multiple fields with `flags` attribute are used)
+    #[tl(flags_field = "mode", flags_bit = 2)]
     utime: Option<u32>,
+
+    // Or you can use the shorter syntax:
+    //
+    // #[tl(flags_bit = "mode.2")]
+    // utime: Option<u32>,
 }
 
 #[derive(TlWrite)]

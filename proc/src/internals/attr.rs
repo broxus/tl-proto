@@ -230,6 +230,7 @@ pub struct Field {
     pub write_with: Option<syn::Expr>,
     pub with: Option<syn::Expr>,
     pub flags: bool,
+    pub flags_field: Option<(syn::Lit, FlagsField)>,
     pub flags_bit: Option<u8>,
     pub default_flags: Option<u32>,
     pub skip_write: bool,
@@ -244,6 +245,7 @@ impl Field {
         let mut write_with = Attr::none(cx, WRITE_WITH);
         let mut with = Attr::none(cx, WITH);
         let mut flags = BoolAttr::none(cx, FLAGS);
+        let mut flags_field = None;
         let mut flags_bit = Attr::none(cx, FLAGS_BIT);
         let mut default_flags = Attr::none(cx, DEFAULT_FLAGS);
         let mut skip = BoolAttr::none(cx, SKIP);
@@ -286,12 +288,35 @@ impl Field {
                 Meta(Path(word)) if word == FLAGS => {
                     flags.set_true(word);
                 }
-                // Parse `#[tl(flags_bit = 0x123456)]`
+                // Parse `#[tl(flags_bit = 0)]` or `#[tl(flags_bit = "field.0")]`
                 Meta(NameValue(m)) if m.path == FLAGS_BIT => {
-                    if let Ok(n) = get_lit_number(cx, FLAGS_BIT, &m.lit) {
+                    if let Ok((field, n)) = get_lit_flags_bit(cx, FLAGS_BIT, &m.lit) {
+                        match (&flags_field, field) {
+                            (None, Some(field)) => {
+                                flags_field = Some((m.lit.clone(), field));
+                            }
+                            (Some((_, flags_field)), Some(field)) => cx.error_spanned_by(
+                                &m.lit,
+                                format!(
+                                    "either #[tl(flags_field = \"{flags_field}\", flags_bit = {n})] \
+                                    or #[tl(flags_bit = \"{field}.{n}\"] can be used"
+                                ),
+                            ),
+                            _ => {}
+                        }
                         flags_bit.set(&m.path, n);
                     }
                 }
+                // Parse `#[tl(flags_field = "field")]`
+                Meta(NameValue(m)) if m.path == FLAGS_FIELD => {
+                    if let Ok(field) = get_lit_str(cx, FLAGS_FIELD, &m.lit) {
+                        flags_field = Some((
+                            syn::Lit::Str(field.clone()),
+                            FlagsField::new(&field.value()),
+                        ));
+                    }
+                }
+                // Parse `#[tl(default_flags = 0x123123)]`
                 Meta(NameValue(m)) if m.path == DEFAULT_FLAGS => {
                     if let Ok(n) = get_lit_number(cx, DEFAULT_FLAGS, &m.lit) {
                         default_flags.set(&m.path, n);
@@ -366,6 +391,7 @@ impl Field {
             write_with,
             with,
             flags,
+            flags_field,
             flags_bit: flags_bit.get(),
             default_flags: default_flags.get(),
             skip_write: skip.get() || skip_write.get(),
@@ -538,6 +564,91 @@ fn get_tl_id_inline(cx: &Ctxt, lit: &syn::Lit) -> Result<TlId, ()> {
             Err(())
         }
     }
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum FlagsField {
+    Named(String),
+    Unnamed(u32),
+}
+
+impl FlagsField {
+    fn new(field: &str) -> Self {
+        let field = field.trim();
+        match field.parse::<u32>() {
+            Ok(idx) => Self::Unnamed(idx),
+            Err(_) => Self::Named(field.to_string()),
+        }
+    }
+}
+
+impl quote::IdentFragment for FlagsField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+impl std::fmt::Display for FlagsField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Named(name) => f.write_str(name),
+            Self::Unnamed(idx) => write!(f, "{idx}"),
+        }
+    }
+}
+
+impl From<&syn::Member> for FlagsField {
+    fn from(m: &syn::Member) -> Self {
+        match m {
+            syn::Member::Named(name) => Self::Named(name.to_string()),
+            syn::Member::Unnamed(m) => Self::Unnamed(m.index),
+        }
+    }
+}
+
+impl PartialEq<syn::Member> for FlagsField {
+    fn eq(&self, rhs: &syn::Member) -> bool {
+        match (self, rhs) {
+            (Self::Named(name), syn::Member::Named(other)) => other == name,
+            (Self::Unnamed(idx), syn::Member::Unnamed(other)) => other.index == *idx,
+            _ => false,
+        }
+    }
+}
+
+fn get_lit_flags_bit(
+    cx: &Ctxt,
+    attr_name: Symbol,
+    lit: &syn::Lit,
+) -> Result<(Option<FlagsField>, u8), ()> {
+    if let syn::Lit::Int(lit) = lit {
+        return lit
+            .base10_parse()
+            .map(|b| (None, b))
+            .map_err(|err| cx.syn_error(err));
+    } else if let syn::Lit::Str(lit) = lit {
+        let string = lit.value();
+        let mut parts = string.split('.');
+        if let (Some(field), Some(bit), None) = (parts.next(), parts.next(), parts.next()) {
+            let bit = bit.trim();
+            let bit = match bit.strip_prefix("0x") {
+                Some(bit) => u8::from_str_radix(bit, 16),
+                None => bit.parse::<u8>(),
+            }
+            .map_err(|_| cx.error_spanned_by(lit, "failed to parse flags bit"))?;
+
+            return Ok((Some(FlagsField::new(field)), bit));
+        }
+    }
+
+    cx.error_spanned_by(
+        lit,
+        format!(
+            "expected tl {a} attribute to be an integer or a string: `{a} = 0` or `{a} = \"field.0\"`",
+            a = attr_name,
+        ),
+    );
+    Err(())
 }
 
 fn get_lit_number<T>(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<T, ()>

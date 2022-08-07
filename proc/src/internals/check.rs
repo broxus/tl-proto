@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::ast::*;
 use super::attr;
@@ -43,7 +43,7 @@ fn check_boxed(cx: &Ctxt, container: &Container, derive: Derive) {
                 }
             }
 
-            let mut unique_ids = HashSet::new();
+            let mut unique_ids = FxHashSet::default();
             for variant in variants {
                 if container.attrs.boxed && variant.attrs.id.is_none() {
                     cx.error_spanned_by(
@@ -154,20 +154,23 @@ where
 
 fn check_flags(cx: &Ctxt, container: &Container) {
     let check_fields = |cx: &Ctxt, fields: &[Field]| {
-        let mut has_flags_field = false;
-        let mut default_flags = None;
-
-        for field in fields {
-            if field.attrs.flags {
-                default_flags = field.attrs.default_flags;
-
-                if has_flags_field {
-                    cx.error_spanned_by(
-                        field.original,
-                        "only single field with #[tl(flags)] is allowed",
-                    );
+        let flag_fields = fields
+            .iter()
+            .enumerate()
+            .filter_map(|(i, field)| {
+                if field.attrs.flags {
+                    Some((
+                        attr::FlagsField::from(&field.member),
+                        (i, field.attrs.default_flags),
+                    ))
+                } else {
+                    None
                 }
+            })
+            .collect::<FxHashMap<_, _>>();
 
+        for (i, field) in fields.iter().enumerate() {
+            if field.attrs.flags {
                 if field.attrs.flags_bit.is_some() {
                     cx.error_spanned_by(
                         field.original,
@@ -192,8 +195,6 @@ fn check_flags(cx: &Ctxt, container: &Container) {
                         "#[tl(size_hint = ...)] is not allowed for flags field",
                     );
                 }
-
-                has_flags_field = true;
             } else if field.attrs.default_flags.is_some() {
                 cx.error_spanned_by(
                     field.original,
@@ -202,14 +203,6 @@ fn check_flags(cx: &Ctxt, container: &Container) {
             }
 
             if let Some(flags_bit) = field.attrs.flags_bit {
-                if !has_flags_field {
-                    cx.error_spanned_by(
-                        field.original,
-                        "the field with #[tl(flags_bit = ...)] must \
-                be declared after the field with #[tl(flags)]",
-                    )
-                }
-
                 if flags_bit > 31 {
                     cx.error_spanned_by(
                         field.original,
@@ -217,8 +210,49 @@ fn check_flags(cx: &Ctxt, container: &Container) {
                     )
                 }
 
+                let (pos, default_flags) = match &field.attrs.flags_field {
+                    Some((lit, m)) => match flag_fields.get(m) {
+                        Some((pos, default_flags)) => (*pos, *default_flags),
+                        None => {
+                            cx.error_spanned_by(lit, "flags field not found");
+                            (0, None)
+                        }
+                    },
+                    None => match flag_fields.iter().next() {
+                        Some((_, (pos, default_flags))) if flag_fields.len() == 1 => {
+                            (*pos, *default_flags)
+                        }
+                        Some(_) => {
+                            cx.error_spanned_by(
+                                field.original,
+                                format!(
+                                    "field name must be explicitly specified \
+                                    #[tl(flags_bit = \"flags_field_name.{flags_bit}\")] \
+                                    when multiple flag fields are used"
+                                ),
+                            );
+                            (0, None)
+                        }
+                        None => {
+                            cx.error_spanned_by(
+                                field.original,
+                                "no fields with #[tl(flags)] found",
+                            );
+                            (0, None)
+                        }
+                    },
+                };
+
+                if i < pos {
+                    cx.error_spanned_by(
+                        field.original,
+                        "the field with #[tl(flags_bit = ...)] must be \
+                        declared after the field with #[tl(flags)]",
+                    );
+                }
+
                 if let Some(default_flags) = default_flags {
-                    if default_flags & (0x1 << flags_bit) != 0 {
+                    if flags_bit < 32 && default_flags & (0x1 << flags_bit) != 0 {
                         cx.error_spanned_by(
                             field.original,
                             format!(
@@ -228,6 +262,11 @@ fn check_flags(cx: &Ctxt, container: &Container) {
                         )
                     }
                 }
+            } else if field.attrs.flags_field.is_some() {
+                cx.error_spanned_by(
+                    field.original,
+                    "#[tl(flags_field = \"...\")] can only be used on the field with #[tl(flags_bit = ...)]",
+                );
             }
         }
     };

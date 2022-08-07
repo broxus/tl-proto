@@ -39,6 +39,20 @@ mod tests {
     }
 
     #[derive(TlRead)]
+    struct StructWithMultipleFlags {
+        #[tl(flags, default_flags = 0x40000000)]
+        flags: (),
+        #[tl(flags_bit = "flags.0")]
+        value_0: Option<u32>,
+        #[tl(flags)]
+        another_flags: (),
+        #[tl(flags_field = "another_flags", flags_bit = 30)]
+        value_30: Option<bool>,
+        #[tl(flags_bit = "another_flags.31")]
+        value_31: Option<bool>,
+    }
+
+    #[derive(TlRead)]
     struct StructWithCustom {
         #[tl(read_with = "read_f32")]
         value: f32,
@@ -86,6 +100,16 @@ mod tests {
         let data: StructWithFlags = tl_proto::deserialize(&target).unwrap();
         assert_eq!(data.value_1, None);
         assert_eq!(data.value_2, Some(true));
+
+        let target = [
+            0u8, 0, 0, 0b01000000, // flags
+            0, 0, 0, 0b01000000, // another_flags
+            181, 117, 114, 153, // value_2: Some
+        ];
+        let data: StructWithMultipleFlags = tl_proto::deserialize(&target).unwrap();
+        assert_eq!(data.value_0, None);
+        assert_eq!(data.value_30, Some(true));
+        assert_eq!(data.value_31, None);
 
         let target = [
             1, 0, 0, 0, // value

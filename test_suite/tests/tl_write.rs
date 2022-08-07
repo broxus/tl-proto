@@ -96,8 +96,22 @@ mod tests {
         flags: (),
         #[tl(flags_bit = 0)]
         value_1: Option<u32>,
-        #[tl(flags_bit = 31)]
+        #[tl(flags_bit = "flags.31")]
         value_2: Option<bool>,
+    }
+
+    #[derive(TlWrite)]
+    struct StructWithMultipleFlags {
+        #[tl(flags, default_flags = 0x40000000)]
+        flags: (),
+        #[tl(flags_bit = "flags.0")]
+        value_0: Option<u32>,
+        #[tl(flags)]
+        another_flags: (),
+        #[tl(flags_field = "another_flags", flags_bit = 30)]
+        value_30: Option<bool>,
+        #[tl(flags_bit = "another_flags.31")]
+        value_31: Option<bool>,
     }
 
     #[derive(TlWrite)]
@@ -185,6 +199,23 @@ mod tests {
         assert_eq!(object.max_size_hint(), 4 + 4);
         let target = [
             0u8, 0, 0, 0b11000000, // flags
+            181, 117, 114, 153, // value_2: Some
+        ];
+        let data = tl_proto::serialize(object);
+        assert_eq!(&data, &target);
+
+        // 4.1
+        let object = StructWithMultipleFlags {
+            flags: (),
+            value_0: None,
+            another_flags: (),
+            value_30: Some(true),
+            value_31: None,
+        };
+        assert_eq!(object.max_size_hint(), 4 + 4 + 4);
+        let target = [
+            0u8, 0, 0, 0b01000000, // flags
+            0, 0, 0, 0b01000000, // another_flags
             181, 117, 114, 153, // value_2: Some
         ];
         let data = tl_proto::serialize(object);

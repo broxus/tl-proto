@@ -1,5 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
+use rustc_hash::FxHashMap;
 
 use super::{bound, dummy, scheme_loader, Derive};
 use crate::internals::{ast, attr, ctxt};
@@ -284,20 +285,32 @@ fn build_write_to<F>(
 where
     F: FnMut(&ast::Field) -> TokenStream,
 {
-    let default_flags = fields
+    let flag_fields = fields
         .iter()
-        .filter_map(|field| field.attrs.default_flags)
-        .next()
-        .unwrap_or_default();
+        .filter_map(|field| {
+            if field.attrs.flags {
+                let default_flags = field.attrs.default_flags.unwrap_or_default();
 
-    let fields_checks = std::iter::once(quote! { #default_flags })
-        .chain(fields.iter().filter_map(|field| {
-            field.attrs.flags_bit.map(|flags_bit| {
-                let field_name = build_field(field);
-                quote! { ((*#field_name.is_some() as u32) << #flags_bit) }
-            })
-        }))
-        .collect::<Vec<_>>();
+                let sum = std::iter::once(quote! { #default_flags })
+                    .chain(fields.iter().filter_map(|other_field| {
+                        if let Some((_, flags_field)) = &other_field.attrs.flags_field {
+                            if flags_field != &field.member {
+                                return None;
+                            }
+                        }
+
+                        other_field.attrs.flags_bit.map(|flags_bit| {
+                            let field_name = build_field(other_field);
+                            quote! { ((*#field_name.is_some() as u32) << #flags_bit) }
+                        })
+                    }))
+                    .collect::<Vec<_>>();
+                Some((attr::FlagsField::from(&field.member), sum))
+            } else {
+                None
+            }
+        })
+        .collect::<FxHashMap<_, _>>();
 
     let id = boxed.then(|| id.as_ref()).flatten();
     let prefix = id
@@ -314,7 +327,8 @@ where
             .map(|field| {
                 let field_name = build_field(field);
                 if field.attrs.flags {
-                    quote! { <u32 as _tl_proto::TlWrite>::write_to::<P_>(&(#(#fields_checks)|*), __packet); }
+                    let sum = flag_fields.get(&attr::FlagsField::from(&field.member)).unwrap();
+                    quote! { <u32 as _tl_proto::TlWrite>::write_to::<P_>(&(#(#sum)|*), __packet); }
                 } else {
                     let write_to = if let Some(with) = &field.attrs.with {
                         quote! { #with::write(#field_name, __packet); }

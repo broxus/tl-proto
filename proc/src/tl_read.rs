@@ -160,35 +160,42 @@ fn build_struct(
 }
 
 fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]) -> TokenStream {
-    let idents = fields.iter().map(|field| match &field.member {
-        syn::Member::Named(member) => {
-            let member = member.to_token_stream();
-            if field.attrs.flags {
-                quote! { #member: () }
-            } else {
-                member
-            }
-        }
-        syn::Member::Unnamed(i) => {
-            if field.attrs.flags {
-                quote! { () }
-            } else {
-                quote::format_ident!("field_{}", i).to_token_stream()
-            }
-        }
-    });
+    fn default_flags_name() -> TokenStream {
+        quote! { __flags }
+    }
 
-    let reads = idents.clone().zip(fields.iter()).map(|(ident, field)| {
+    let has_multiple_flags_fields = fields.iter().filter(|field| field.attrs.flags).count() > 1;
+    let make_flags_field_name = |ident: &dyn quote::IdentFragment| {
+        if has_multiple_flags_fields {
+            quote::format_ident!("__flags_{}", ident).to_token_stream()
+        } else {
+            default_flags_name()
+        }
+    };
+
+    let make_ident_name = |member: &syn::Member, flags_field: bool| match member {
+        _ if flags_field => make_flags_field_name(member),
+        syn::Member::Named(member) => member.to_token_stream(),
+        syn::Member::Unnamed(i) => quote::format_ident!("field_{}", i).to_token_stream(),
+    };
+
+    let reads = fields.iter().map(|field| {
         let ty = &field.ty;
+
+        let ident = make_ident_name(&field.member, field.attrs.flags);
 
         if field.attrs.flags {
             quote! {
-                let __flags = <u32 as _tl_proto::TlRead<'tl>>::read_from(__packet, __offset)?;
+                let #ident = <u32 as _tl_proto::TlRead<'tl>>::read_from(__packet, __offset)?;
             }
         } else if field.attrs.skip_read {
             quote! { let #ident = Default::default(); }
         } else if let Some(flags_bit) = field.attrs.flags_bit {
             let mask = 0x1u32 << flags_bit;
+            let flags_ident = match &field.attrs.flags_field {
+                Some((_, field)) => make_flags_field_name(field),
+                None => default_flags_name(),
+            };
 
             let read = if let Some(with) = &field.attrs.with {
                 quote! { #with::read(__packet, __offset)? }
@@ -203,7 +210,7 @@ fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]
             };
 
             quote! {
-                let #ident = if __flags & #mask != 0 {
+                let #ident = if #flags_ident & #mask != 0 {
                     Some(#read)
                 } else {
                     None
@@ -224,19 +231,29 @@ fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]
         }
     });
 
+    let members = fields.iter().map(|field| match &field.member {
+        syn::Member::Named(member) if field.attrs.flags => {
+            quote! { #member: () }
+        }
+        syn::Member::Unnamed(_) if field.attrs.flags => {
+            quote! { () }
+        }
+        member => make_ident_name(member, false),
+    });
+
     match style {
         ast::Style::Struct => {
             quote! {
                 #(#reads)*
                 Ok(#ident {
-                    #(#idents),*,
+                    #(#members),*,
                 })
             }
         }
         ast::Style::Tuple => {
             quote! {
                 #(#reads)*
-                Ok(#ident(#(#idents),*))
+                Ok(#ident(#(#members),*))
             }
         }
         ast::Style::Unit => quote! {
