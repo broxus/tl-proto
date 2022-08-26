@@ -1,6 +1,6 @@
 #[allow(dead_code)]
 mod tests {
-    use tl_proto::{TlError, TlRead, TlResult};
+    use tl_proto::{BytesMeta, TlError, TlRead, TlResult};
 
     #[derive(TlRead)]
     struct SimpleStruct {
@@ -9,6 +9,7 @@ mod tests {
 
     #[derive(TlRead)]
     struct StructWithRef<'tl> {
+        meta: BytesMeta,
         value: &'tl [u8],
     }
 
@@ -92,6 +93,21 @@ mod tests {
     #[test]
     fn correct_deserialization() {
         assert_eq!(BoxedEnum::TL_ID_FIRST, 0x1);
+        let target = [
+            1, 0, 0, 0, // id
+            10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, // value
+            123, 0, 0, 0, 0, 0, 0, 0, // another
+        ];
+        let data: BoxedEnum = tl_proto::deserialize(&target).unwrap();
+        if let BoxedEnum::First { value, another } = data {
+            assert_eq!(value.meta.prefix_len, 1);
+            assert_eq!(value.meta.len, value.value.len());
+            assert_eq!(value.meta.padding, 1);
+            assert_eq!(value.value.len(), 10);
+            assert_eq!(another, 123);
+        } else {
+            panic!("Unknown variant");
+        }
 
         let target = [
             0, 0, 0, 0x80, // flags

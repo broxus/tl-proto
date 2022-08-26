@@ -2,6 +2,31 @@ use smallvec::SmallVec;
 
 use crate::traits::*;
 
+/// `ton::bytes` meta.
+///
+/// NOTE: Doesn't consume slice (leaves offset as unchanged)
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct BytesMeta {
+    pub prefix_len: usize,
+    pub len: usize,
+    pub padding: usize,
+}
+
+impl<'a> TlRead<'a> for BytesMeta {
+    type Repr = Bare;
+
+    #[inline(always)]
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
+        let (prefix_len, len, padding) = compute_bytes_meta(packet, *offset)?;
+
+        Ok(Self {
+            prefix_len,
+            len,
+            padding,
+        })
+    }
+}
+
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl<'a> TlRead<'a> for &'a [u8] {
     type Repr = Bare;
@@ -489,20 +514,35 @@ where
 
 #[inline(always)]
 fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
-    let packet_len = packet.len();
     let current_offset = *offset;
+    let (prefix_len, len, padding) = compute_bytes_meta(packet, current_offset)?;
 
-    if unlikely(packet_len <= current_offset) {
+    let result = unsafe {
+        std::slice::from_raw_parts(packet.as_ptr().add(current_offset + prefix_len), len)
+    };
+
+    *offset += prefix_len + len + padding;
+    Ok(result)
+}
+
+/// Fetches bytes meta without consuming slice
+///
+/// Returns **prefix length**, **bytes length** and **padding length**
+#[inline(always)]
+fn compute_bytes_meta(packet: &[u8], offset: usize) -> TlResult<(usize, usize, usize)> {
+    let packet_len = packet.len();
+
+    if unlikely(packet_len <= offset) {
         return Err(TlError::UnexpectedEof);
     }
 
     // SAFETY: `current_offset` is guaranteed to be less than `packet_len`
     // but the compiler is not able to eliminate bounds check
-    let first_bytes = unsafe { *packet.get_unchecked(current_offset) };
+    let first_bytes = unsafe { *packet.get_unchecked(offset) };
     let (len, have_read) = if first_bytes != 254 {
         (first_bytes as usize, 1)
     } else {
-        if packet_len <= current_offset + 3 {
+        if unlikely(packet_len <= offset + 3) {
             return Err(TlError::UnexpectedEof);
         }
 
@@ -510,25 +550,21 @@ fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
 
         // SAFETY: `current_offset + 3` is guaranteed to be less than `packet_len`
         unsafe {
-            len = *packet.get_unchecked(current_offset + 1) as usize;
-            len |= (*packet.get_unchecked(current_offset + 2) as usize) << 8;
-            len |= (*packet.get_unchecked(current_offset + 3) as usize) << 16;
+            len = *packet.get_unchecked(offset + 1) as usize;
+            len |= (*packet.get_unchecked(offset + 2) as usize) << 8;
+            len |= (*packet.get_unchecked(offset + 3) as usize) << 16;
         }
 
         (len, 4)
     };
 
-    let remainder = (4 - (have_read + len) % 4) % 4;
+    let padding = (4 - (have_read + len) % 4) % 4;
 
-    if unlikely(packet_len < current_offset + have_read + len + remainder) {
+    if unlikely(packet_len < offset + have_read + len + padding) {
         return Err(TlError::UnexpectedEof);
     }
 
-    let result =
-        unsafe { std::slice::from_raw_parts(packet.as_ptr().add(current_offset + have_read), len) };
-
-    *offset += have_read + len + remainder;
-    Ok(result)
+    Ok((have_read, len, padding))
 }
 
 /// Brings [unlikely](core::intrinsics::unlikely) to stable rust.
