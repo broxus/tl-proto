@@ -91,7 +91,7 @@ fn build_tl_ids_struct(container: &ast::Container) -> TokenStream {
     let id = container
         .attrs
         .boxed
-        .then(|| container.attrs.id.as_ref())
+        .then_some(container.attrs.id.as_ref())
         .flatten();
     let id = id
         .map(|id| {
@@ -136,7 +136,7 @@ fn build_struct(
     let id = container
         .attrs
         .boxed
-        .then(|| container.attrs.id.as_ref())
+        .then_some(container.attrs.id.as_ref())
         .flatten();
     let prefix = id
         .map(|id| {

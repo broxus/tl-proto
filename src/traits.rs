@@ -33,7 +33,10 @@ where
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        Ok(Arc::new(T::read_from(packet, offset)?))
+        match T::read_from(packet, offset) {
+            Ok(data) => Ok(Arc::new(data)),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -45,7 +48,10 @@ where
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        Ok(Box::new(T::read_from(packet, offset)?))
+        match T::read_from(packet, offset) {
+            Ok(data) => Ok(Box::new(data)),
+            Err(e) => Err(e),
+        }
     }
 }
 

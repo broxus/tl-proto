@@ -6,6 +6,19 @@ pub use self::hasher::*;
 pub use self::seq::*;
 pub use self::traits::*;
 
+// None of this crate's error handling needs the `From::from` error conversion
+// performed implicitly by the `?` operator or the standard library's `try!`
+// macro. This simplified macro gives a 5.5% improvement in compile time
+// compared to standard `try!`, and 9% improvement compared to `?`.
+macro_rules! ok {
+    ($expr:expr) => {
+        match $expr {
+            Ok(val) => val,
+            Err(err) => return Err(err),
+        }
+    };
+}
+
 mod boxed;
 mod hasher;
 mod option;
@@ -13,6 +26,7 @@ mod primitive;
 mod seq;
 mod traits;
 mod tuple;
+mod util;
 
 pub fn deserialize<'a, T>(packet: &'a [u8]) -> TlResult<T>
 where
@@ -26,8 +40,10 @@ pub fn deserialize_as_boxed<'a, T>(packet: &'a [u8]) -> TlResult<T>
 where
     T: TlRead<'a, Repr = Bare> + BoxedConstructor,
 {
-    let BoxedWrapper(result) = deserialize(packet)?;
-    Ok(result)
+    match deserialize(packet) {
+        Ok(BoxedWrapper(result)) => Ok(result),
+        Err(e) => Err(e),
+    }
 }
 
 pub fn serialize<T>(data: T) -> Vec<u8>

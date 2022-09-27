@@ -312,7 +312,7 @@ where
         })
         .collect::<FxHashMap<_, _>>();
 
-    let id = boxed.then(|| id.as_ref()).flatten();
+    let id = boxed.then_some(id.as_ref()).flatten();
     let prefix = id
         .map(|id| {
             let id = id.unwrap_explicit();

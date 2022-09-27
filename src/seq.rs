@@ -1,6 +1,7 @@
 use smallvec::SmallVec;
 
 use crate::traits::*;
+use crate::util::*;
 
 /// `ton::bytes` meta.
 ///
@@ -17,13 +18,14 @@ impl<'a> TlRead<'a> for BytesMeta {
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let (prefix_len, len, padding) = compute_bytes_meta(packet, *offset)?;
-
-        Ok(Self {
-            prefix_len,
-            len,
-            padding,
-        })
+        match compute_bytes_meta(packet, *offset) {
+            Ok((prefix_len, len, padding)) => Ok(Self {
+                prefix_len,
+                len,
+                padding,
+            }),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -61,7 +63,10 @@ impl<'a> TlRead<'a> for Vec<u8> {
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        Ok(read_bytes(packet, offset)?.to_vec())
+        match read_bytes(packet, offset) {
+            Ok(bytes) => Ok(bytes.to_vec()),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -89,7 +94,10 @@ impl TlRead<'_> for bytes::Bytes {
 
     #[inline(always)]
     fn read_from(packet: &'_ [u8], offset: &mut usize) -> TlResult<Self> {
-        Ok(read_bytes(packet, offset)?.to_vec().into())
+        match read_bytes(packet, offset) {
+            Ok(bytes) => Ok(bytes::Bytes::from(Box::from(bytes))),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -127,7 +135,10 @@ impl<'a, const N: usize> TlRead<'a> for [u8; N] {
 
     #[inline(always)]
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        read_fixed_bytes(packet, offset).map(|&t| t)
+        match read_fixed_bytes(packet, offset) {
+            Ok(data) => Ok(*data),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -158,11 +169,11 @@ where
     type Repr = Bare;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let len = read_vector_len(packet, offset)?;
+        let len = ok!(read_vector_len(packet, offset));
 
         let mut items = SmallVec::<[T; N]>::with_capacity(len);
         for _ in 0..len {
-            items.push(TlRead::read_from(packet, offset)?);
+            items.push(ok!(TlRead::read_from(packet, offset)));
         }
         Ok(items)
     }
@@ -176,11 +187,11 @@ where
     type Repr = Bare;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let len = read_vector_len(packet, offset)?;
+        let len = ok!(read_vector_len(packet, offset));
 
         let mut items = Vec::with_capacity(len);
         for _ in 0..len {
-            items.push(TlRead::read_from(packet, offset)?);
+            items.push(ok!(TlRead::read_from(packet, offset)));
         }
         Ok(items)
     }
@@ -273,8 +284,13 @@ where
     type Repr = Bare;
 
     fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let intermediate = read_bytes(packet, offset)?;
-        T::read_from(intermediate, &mut 0).map(IntermediateBytes)
+        match read_bytes(packet, offset) {
+            Ok(intermediate) => match T::read_from(intermediate, &mut 0) {
+                Ok(data) => Ok(IntermediateBytes(data)),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -377,6 +393,7 @@ impl<R: Repr> TlWrite for RawBytes<'_, R> {
 pub struct OwnedRawBytes<R>(Vec<u8>, std::marker::PhantomData<R>);
 
 impl<R> OwnedRawBytes<R> {
+    #[inline(always)]
     pub fn new(raw: Vec<u8>) -> Self {
         OwnedRawBytes(raw, std::marker::PhantomData)
     }
@@ -416,11 +433,10 @@ impl<R: Repr> TlRead<'_> for OwnedRawBytes<R> {
     type Repr = R;
 
     fn read_from(packet: &'_ [u8], offset: &mut usize) -> TlResult<Self> {
-        Ok(Self::new(
-            RawBytes::<R>::read_from(packet, offset)?
-                .into_inner()
-                .to_vec(),
-        ))
+        match RawBytes::<R>::read_from(packet, offset) {
+            Ok(RawBytes(inner, ..)) => Ok(Self::new(inner.to_vec())),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -443,7 +459,7 @@ impl<R: Repr> TlWrite for OwnedRawBytes<R> {
 
 #[inline(always)]
 fn read_vector_len(packet: &[u8], offset: &mut usize) -> TlResult<usize> {
-    let len = u32::read_from(packet, offset)? as usize;
+    let len = ok!(u32::read_from(packet, offset)) as usize;
 
     // Length cannot be greater than the rest of the packet.
     // However min item size is 4 bytes so we could reduce it four times
@@ -515,7 +531,7 @@ where
 #[inline(always)]
 fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
     let current_offset = *offset;
-    let (prefix_len, len, padding) = compute_bytes_meta(packet, current_offset)?;
+    let (prefix_len, len, padding) = ok!(compute_bytes_meta(packet, current_offset));
 
     let result = unsafe {
         std::slice::from_raw_parts(packet.as_ptr().add(current_offset + prefix_len), len)
@@ -565,15 +581,4 @@ fn compute_bytes_meta(packet: &[u8], offset: usize) -> TlResult<(usize, usize, u
     }
 
     Ok((have_read, len, padding))
-}
-
-/// Brings [unlikely](core::intrinsics::unlikely) to stable rust.
-#[inline(always)]
-const fn unlikely(b: bool) -> bool {
-    #[allow(clippy::needless_bool)]
-    if (1i32).checked_div(if b { 0 } else { 1 }).is_none() {
-        true
-    } else {
-        false
-    }
 }

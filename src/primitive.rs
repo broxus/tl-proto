@@ -1,13 +1,15 @@
 use crate::traits::*;
+use crate::util::*;
 
 impl TlRead<'_> for bool {
     type Repr = Boxed;
 
     fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
-        match u32::read_from(packet, offset)? {
-            BOOL_TRUE => Ok(true),
-            BOOL_FALSE => Ok(false),
-            _ => Err(TlError::UnknownConstructor),
+        match u32::read_from(packet, offset) {
+            Ok(BOOL_TRUE) => Ok(true),
+            Ok(BOOL_FALSE) => Ok(false),
+            Ok(_) => Err(TlError::UnknownConstructor),
+            Err(e) => Err(e),
         }
     }
 }
@@ -36,7 +38,7 @@ macro_rules! impl_read_from_packet(
 
             #[inline(always)]
             fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
-                if packet.len() < *offset + std::mem::size_of::<$ty>() {
+                if unlikely(packet.len() < *offset + std::mem::size_of::<$ty>()) {
                     Err(TlError::UnexpectedEof)
                 } else {
                     let value = <$ty>::from_le_bytes(unsafe {
