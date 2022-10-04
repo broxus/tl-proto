@@ -235,7 +235,7 @@ where
     where
         P: TlPacket,
     {
-        (self.len() as i32).write_to(packet);
+        (self.len() as u32).write_to(packet);
         for item in *self {
             item.write_to(packet);
         }
@@ -261,6 +261,38 @@ where
         P: TlPacket,
     {
         self.as_slice().write_to(packet)
+    }
+}
+
+/// Helper type which is used to serialize iterator as vector
+///
+/// NOTE: iterator is cloned for `max_size_hint` and `write_to`
+#[derive(Copy, Clone)]
+pub struct IterRef<'a, I: Sized>(pub &'a I);
+
+impl<I, T> TlWrite for IterRef<'_, I>
+where
+    I: Iterator<Item = T> + ExactSizeIterator + Clone,
+    T: TlWrite,
+{
+    type Repr = Bare;
+
+    fn max_size_hint(&self) -> usize {
+        let mut total = 4;
+        for item in self.0.clone() {
+            total += item.max_size_hint();
+        }
+        total
+    }
+
+    fn write_to<P>(&self, packet: &mut P)
+    where
+        P: TlPacket,
+    {
+        (self.0.len() as u32).write_to(packet);
+        for item in self.0.clone() {
+            item.write_to(packet);
+        }
     }
 }
 
