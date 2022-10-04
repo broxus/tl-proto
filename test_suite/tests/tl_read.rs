@@ -61,6 +61,12 @@ mod tests {
         another: u128,
     }
 
+    #[derive(TlRead)]
+    struct StructWithSignature<'tl> {
+        #[tl(signature)]
+        signature: &'tl [u8],
+    }
+
     fn read_f32(mut packet: &[u8], offset: &mut usize) -> TlResult<f32> {
         use std::io::Read;
 
