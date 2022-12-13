@@ -9,7 +9,6 @@ impl<T> HashWrapper<T>
 where
     T: TlWrite,
 {
-    // TODO: use `&mut dyn digest::Update` when `digest 0.10` will be available to use
     #[inline(always)]
     pub fn update_hasher<H: digest::Update>(&self, engine: &mut H) {
         self.0.write_to(&mut DigestWriter(engine));

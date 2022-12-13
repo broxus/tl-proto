@@ -178,7 +178,7 @@ fn convert_f64(f: &f64) -> u64 {
     exp -= 1023 + 52;
 
     let exp_u64 = exp as u64;
-    let sign_u64 = if sign > 0 { 1u64 } else { 0u64 };
+    let sign_u64 = u64::from(sign > 0);
     (man & MAN_MASK) | ((exp_u64 << 52) & EXP_MASK) | ((sign_u64 << 63) & SIGN_MASK)
 }
 
