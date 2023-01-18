@@ -66,6 +66,8 @@ pub struct AddressList<'tl> {
 }
 
 impl<'tl> TlRead<'tl> for AddressList<'tl> {
+    type Repr = Bare;
+
     fn read_from(packet: &'tl [u8], offset: &mut usize) -> TlResult<Self> {
         let address_count = u32::read_from(packet, offset)?;
         let mut address = None;
