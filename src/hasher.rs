@@ -2,6 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::traits::*;
 
+/// Wrapper type to update hasher using the TL representation of type `T`.
 #[derive(Eq)]
 pub struct HashWrapper<T>(pub T);
 
@@ -9,6 +10,7 @@ impl<T> HashWrapper<T>
 where
     T: TlWrite,
 {
+    /// Updates the specified hasher this the TL representation of inner data.
     #[inline(always)]
     pub fn update_hasher<H: digest::Update>(&self, engine: &mut H) {
         self.0.write_to(&mut DigestWriter(engine));

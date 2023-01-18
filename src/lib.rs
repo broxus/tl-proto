@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![doc = include_str!("../README.md")]
+
 #[cfg(feature = "derive")]
 pub use tl_proto_proc::{id, TlRead, TlWrite};
 
@@ -28,6 +31,7 @@ mod traits;
 mod tuple;
 mod util;
 
+/// Tries to deserialize `T` from the TL representation.
 pub fn deserialize<'a, T>(packet: &'a [u8]) -> TlResult<T>
 where
     T: TlRead<'a>,
@@ -35,6 +39,20 @@ where
     T::read_from(packet, &mut 0)
 }
 
+/// Tries to deserialize `T` as boxed from the TL representation.
+///
+/// `T` must be `Bare` type.
+///
+/// Equivalent to this:
+/// ```
+/// # use tl_proto::{Bare, BoxedConstructor, BoxedWrapper, TlRead, TlResult};
+/// # fn test<'a, T>(packet: &'a [u8]) -> TlResult<T>
+/// # where T: TlRead<'a, Repr = Bare> + BoxedConstructor {
+/// let BoxedWrapper::<T>(data) = tl_proto::deserialize(packet)?;
+/// # Ok(data) }
+/// ```
+///
+/// See [`BoxedWrapper`]
 #[inline(always)]
 pub fn deserialize_as_boxed<'a, T>(packet: &'a [u8]) -> TlResult<T>
 where
@@ -46,6 +64,7 @@ where
     }
 }
 
+/// Serializes `T` into bytes.
 pub fn serialize<T>(data: T) -> Vec<u8>
 where
     T: TlWrite,
@@ -55,6 +74,9 @@ where
     result
 }
 
+/// Wraps `T` into [`BoxedWrapper`] and serializes into bytes.
+///
+/// `T` must be `Bare` type.
 #[inline(always)]
 pub fn serialize_as_boxed<T>(data: T) -> Vec<u8>
 where
@@ -63,6 +85,7 @@ where
     serialize(data.into_boxed())
 }
 
+/// Serializes `T` into an existing buffer **overwriting its content**.
 pub fn serialize_into<T>(data: T, buffer: &mut Vec<u8>)
 where
     T: TlWrite,
@@ -72,6 +95,10 @@ where
     data.write_to(buffer);
 }
 
+/// Wraps `T` into [`BoxedWrapper`] and serializes it into an existing
+/// buffer **overwriting its content**.
+///
+/// `T` must be `Bare` type.
 #[inline(always)]
 pub fn serialize_into_as_boxed<T>(data: T, buffer: &mut Vec<u8>)
 where
@@ -80,6 +107,7 @@ where
     serialize_into(data.into_boxed(), buffer);
 }
 
+/// Computes the `sha256` hash of the TL representation of `T`.
 #[cfg(feature = "hash")]
 pub fn hash<T>(data: T) -> [u8; 32]
 where
@@ -92,6 +120,10 @@ where
     hasher.finalize().into()
 }
 
+/// Computes the `sha256` hash of the TL representation of `T`
+/// wrapped into [`BoxedWrapper`].
+///
+/// `T` must be `Bare` type.
 #[cfg(feature = "hash")]
 #[inline(always)]
 pub fn hash_as_boxed<T>(data: T) -> [u8; 32]

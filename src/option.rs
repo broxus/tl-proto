@@ -1,6 +1,6 @@
 use crate::traits::*;
 
-/// Skips serialization if `None`, serializes as `T` otherwise
+/// Skips serialization if `None`, serializes as `T` otherwise.
 impl<T> TlWrite for Option<T>
 where
     T: TlWrite,

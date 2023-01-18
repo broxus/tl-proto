@@ -10,6 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 smallvec = { version = "1.8", features = ["const_generics", "union"] }
+bytes = "1"
 
 [dependencies.tl-proto]
 path = ".."
@@ -17,6 +18,12 @@ path = ".."
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
+
+[[bin]]
+name = "deserialize_packet"
+path = "fuzz_targets/deserialize_packet.rs"
+test = false
+doc = false
 
 [[bin]]
 name = "deserialize"

@@ -5,11 +5,14 @@ use crate::util::*;
 
 /// `ton::bytes` meta.
 ///
-/// NOTE: Doesn't consume slice (leaves offset as unchanged)
+/// NOTE: Doesn't consume slice (leaves offset as unchanged).
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct BytesMeta {
+    /// Length in bytes of the prefix (1 or 4 bytes).
     pub prefix_len: usize,
+    /// Length in bytes.
     pub len: usize,
+    /// Precomputed bytes padding (`0..=3`).
     pub padding: usize,
 }
 
@@ -58,6 +61,34 @@ impl TlWrite for &[u8] {
 }
 
 /// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
+impl<'a> TlRead<'a> for Box<[u8]> {
+    type Repr = Bare;
+
+    #[inline(always)]
+    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
+        Ok(Box::from(ok!(read_bytes(packet, offset))))
+    }
+}
+
+/// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
+impl TlWrite for Box<[u8]> {
+    type Repr = Bare;
+
+    #[inline(always)]
+    fn max_size_hint(&self) -> usize {
+        bytes_max_size_hint(self.len())
+    }
+
+    #[inline(always)]
+    fn write_to<P>(&self, packet: &mut P)
+    where
+        P: TlPacket,
+    {
+        write_bytes(self, packet)
+    }
+}
+
+/// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
 impl<'a> TlRead<'a> for Vec<u8> {
     type Repr = Bare;
 
@@ -70,7 +101,7 @@ impl<'a> TlRead<'a> for Vec<u8> {
     }
 }
 
-/// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4)
+/// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4).
 impl TlWrite for Vec<u8> {
     type Repr = Bare;
 
@@ -88,6 +119,7 @@ impl TlWrite for Vec<u8> {
     }
 }
 
+/// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4).
 #[cfg(feature = "bytes")]
 impl TlRead<'_> for bytes::Bytes {
     type Repr = Bare;
@@ -101,6 +133,7 @@ impl TlRead<'_> for bytes::Bytes {
     }
 }
 
+/// `ton::bytes` - 1 or 4 bytes of `len`, then `len` bytes of data (aligned to 4).
 #[cfg(feature = "bytes")]
 impl TlWrite for bytes::Bytes {
     type Repr = Bare;
@@ -119,7 +152,7 @@ impl TlWrite for bytes::Bytes {
     }
 }
 
-/// `ton::int128 | ton::int256` - N bytes of data
+/// `ton::int128 | ton::int256` - N bytes of data.
 impl<'a, const N: usize> TlRead<'a> for &'a [u8; N] {
     type Repr = Bare;
 
@@ -129,7 +162,7 @@ impl<'a, const N: usize> TlRead<'a> for &'a [u8; N] {
     }
 }
 
-/// `ton::int128 | ton::int256` - N bytes of data
+/// `ton::int128 | ton::int256` - N bytes of data.
 impl<'a, const N: usize> TlRead<'a> for [u8; N] {
     type Repr = Bare;
 
@@ -142,7 +175,7 @@ impl<'a, const N: usize> TlRead<'a> for [u8; N] {
     }
 }
 
-/// `ton::int128 | ton::int256` - N bytes of data
+/// `ton::int128 | ton::int256` - N bytes of data.
 impl<const N: usize> TlWrite for [u8; N] {
     type Repr = Bare;
 
@@ -160,7 +193,7 @@ impl<const N: usize> TlWrite for [u8; N] {
     }
 }
 
-/// `ton::vector` - 4 bytes of `len`, then `len` items
+/// `ton::vector` - 4 bytes of `len`, then `len` items.
 impl<'a, T, const N: usize> TlRead<'a> for SmallVec<[T; N]>
 where
     [T; N]: smallvec::Array,
@@ -179,7 +212,7 @@ where
     }
 }
 
-/// `ton::vector` - 4 bytes of `len`, then `len` items
+/// `ton::vector` - 4 bytes of `len`, then `len` items.
 impl<'a, T> TlRead<'a> for Vec<T>
 where
     T: TlRead<'a>,
@@ -197,7 +230,7 @@ where
     }
 }
 
-/// `ton::vector` - 4 bytes of `len`, then `len` items
+/// `ton::vector` - 4 bytes of `len`, then `len` items.
 impl<T> TlWrite for Vec<T>
 where
     T: TlWrite,
@@ -218,7 +251,7 @@ where
     }
 }
 
-/// `ton::vector` - 4 bytes of `len`, then `len` items
+/// `ton::vector` - 4 bytes of `len`, then `len` items.
 impl<T> TlWrite for &[T]
 where
     T: TlWrite,
@@ -242,7 +275,7 @@ where
     }
 }
 
-/// `ton::vector` - 4 bytes of `len`, then `len` items
+/// `ton::vector` - 4 bytes of `len`, then `len` items.
 impl<T, const N: usize> TlWrite for SmallVec<[T; N]>
 where
     [T; N]: smallvec::Array,
@@ -264,9 +297,9 @@ where
     }
 }
 
-/// Helper type which is used to serialize iterator as vector
+/// Helper type which is used to serialize iterator as vector.
 ///
-/// NOTE: iterator is cloned for `max_size_hint` and `write_to`
+/// NOTE: iterator is cloned for `max_size_hint` and `write_to`.
 #[derive(Copy, Clone)]
 pub struct IterRef<'a, I: Sized>(pub &'a I);
 
@@ -296,7 +329,7 @@ where
     }
 }
 
-/// Helper type which is used to represent field value as bytes
+/// Helper type which is used to represent field value as bytes.
 #[derive(Debug, Clone)]
 pub struct IntermediateBytes<T>(pub T);
 
@@ -304,6 +337,7 @@ impl<T> IntermediateBytes<T>
 where
     T: AsRef<[u8]>,
 {
+    /// Returns the underlying slice.
     pub fn as_slice(&self) -> &[u8] {
         self.0.as_ref()
     }
@@ -354,14 +388,16 @@ where
     }
 }
 
-/// Helper type which reads remaining packet as is
+/// Helper type which reads remaining packet as is.
 pub struct RawBytes<'a, R>(&'a [u8], std::marker::PhantomData<R>);
 
 impl<'a, R> RawBytes<'a, R> {
+    /// Creates new bytes wrapper.
     pub fn new(raw: &'a [u8]) -> Self {
         RawBytes(raw, std::marker::PhantomData)
     }
 
+    /// Converts into the underlying bytes.
     #[inline(always)]
     pub fn into_inner(self) -> &'a [u8] {
         self.0
@@ -422,14 +458,19 @@ impl<R: Repr> TlWrite for RawBytes<'_, R> {
     }
 }
 
+/// Helper type which reads remaining packet as is.
+///
+/// Use [`RawBytes`] if you don't need to move bytes.
 pub struct OwnedRawBytes<R>(Vec<u8>, std::marker::PhantomData<R>);
 
 impl<R> OwnedRawBytes<R> {
+    /// Creates new bytes wrapper.
     #[inline(always)]
     pub fn new(raw: Vec<u8>) -> Self {
         OwnedRawBytes(raw, std::marker::PhantomData)
     }
 
+    /// Converts into the underlying bytes.
     #[inline(always)]
     pub fn into_inner(self) -> Vec<u8> {
         self.0

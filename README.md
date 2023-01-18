@@ -8,7 +8,7 @@
 
 [Rust 1.56]: https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html
 
-[Workflow badge]: https://img.shields.io/github/workflow/status/broxus/tl-proto/master
+[Workflow badge]: https://img.shields.io/github/actions/workflow/status/broxus/tl-proto/master.yml?branch=master
 
 [Workflow]: https://github.com/broxus/tl-proto/actions?query=workflow%3Amaster
 
@@ -46,10 +46,10 @@ liteServer.lookupBlock mode:# id:tonNode.blockId lt:mode.1?long utime:mode.2?int
 > NOTE: TL scheme is parsed by [`tl-scheme`](./scheme) crate at compile time.
 > It doesn't cover full TL grammer, but it's enough for most of the cases.
 
-```rust
+```rust,ignore
 use tl_proto::{TlRead, TlWrite};
 
-/// You can declare "bare" structs, which 
+/// You can declare "bare" structs, which
 /// doesn't have an associated TL id.
 ///
 /// NOTE: enums can only be used as bare
@@ -62,7 +62,7 @@ struct HashRef<'tl>(&'tl [u8; 32]);
 
 /// Or you can declare "boxed" structs, which
 /// have one or more associated TL ids.
-/// 
+///
 /// NOTE: in case of boxed enum with provided scheme,
 /// all variants must have the same constructor kind
 /// (all functions or all types). And if all variants
@@ -162,7 +162,7 @@ mod tl_shard {
 /// - `tl_proto::serialize_as_boxed` - write bare type as boxed
 /// - `tl_proto::hash_as_boxed` - compute hash of the boxed repr
 impl tl_proto::BoxedConstructor for BlockId {
-    /// There is a way to compute id of a variant at 
+    /// There is a way to compute id of a variant at
     /// compile time using the provided scheme
     const TL_ID: u32 = tl_proto::id!("liteServer.lookupBlock", scheme = "my_proto.tl");
 }
@@ -196,23 +196,23 @@ struct StructWithSignature {
     value: u64,
     /// `signature` is used by `TlWrite` to simplify signature
     /// verification. In most cases you sign a data with an empty signature,
-    /// so this attribute just writes `&[]` to the packet of type `P` if 
+    /// so this attribute just writes `&[]` to the packet of type `P` if
     /// `<P as TlPacket>::TARGET == TlTarget::Hasher`
     #[tl(signature)]
     my_signature: [u8; 64],
 }
 
-/// You can constraint the type by its representation 
+/// You can constraint the type by its representation
 /// (`tl_proto::Bare` / `tl_proto::Boxed`)
 fn ultra_hash<T: TlWrite<Repr = tl_proto::Boxed>>(object: T) -> u32 {
     tl_proto::serialize(object).len() as u32
 }
 
 fn main() {
-    // When the struct or enum has `TlRead` derive macro 
-    // and it is marked `boxed`, it also exposes 
+    // When the struct or enum has `TlRead` derive macro
+    // and it is marked `boxed`, it also exposes
     // either `TL_ID` constant (in case of struct)
-    // or `TL_ID_*` constants (in case of enum) where 
+    // or `TL_ID_*` constants (in case of enum) where
     // `*` is a variant name in screaming snake case
     assert_eq!(PublicKey::TL_ID_AES, 0x2dbcadd4);
 

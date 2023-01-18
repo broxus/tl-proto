@@ -45,6 +45,7 @@ pub fn id(input: TokenStream) -> TokenStream {
         .into()
 }
 
+/// Implements `TlWrite` for the type.
 #[proc_macro_derive(TlWrite, attributes(tl))]
 pub fn derive_tl_write(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
@@ -53,6 +54,7 @@ pub fn derive_tl_write(input: TokenStream) -> TokenStream {
         .into()
 }
 
+/// Implements `TlRead` for the type.
 #[proc_macro_derive(TlRead, attributes(tl))]
 pub fn derive_tl_read(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);

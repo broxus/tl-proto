@@ -1,15 +1,16 @@
 use crate::traits::*;
 
-/// Marks bare type with the appropriate constructor id
+/// Marks bare type with the appropriate constructor id.
 pub trait BoxedConstructor: Sized {
+    /// Constructor id.
     const TL_ID: u32;
 
-    /// Wraps bare type reference into `BoxedWrapper`
+    /// Wraps bare type reference into `BoxedWrapper`.
     fn as_boxed(&self) -> BoxedWrapper<&Self> {
         BoxedWrapper(self)
     }
 
-    /// Converts bare type into `BoxedWrapper`
+    /// Converts bare type into `BoxedWrapper`.
     fn into_boxed(self) -> BoxedWrapper<Self> {
         BoxedWrapper(self)
     }
@@ -24,7 +25,7 @@ where
 
 /// Simple helper which contains inner value and constructor id.
 ///
-/// Used mostly for serialization, so can contain references
+/// Used mostly for serialization, so can contain references.
 #[derive(Debug, Clone)]
 pub struct BoxedWrapper<T>(pub T);
 

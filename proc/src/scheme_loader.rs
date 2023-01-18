@@ -166,7 +166,7 @@ fn load_scheme<'a>(cx: &ctxt::Ctxt, scheme: &'a attr::Scheme) -> Option<(String,
     match &scheme.source {
         attr::SchemeSource::File { path } => {
             let root = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
-            let full_path = Path::new(&root).join("src/").join(&path.value());
+            let full_path = Path::new(&root).join("src/").join(path.value());
             if full_path.file_name().is_none() {
                 cx.error_spanned_by(path, "scheme attribute should point to a file");
                 return None;
