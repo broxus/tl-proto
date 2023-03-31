@@ -536,7 +536,7 @@ fn read_vector_len(packet: &[u8], offset: &mut usize) -> TlResult<usize> {
 
     // Length cannot be greater than the rest of the packet.
     // However min item size is 4 bytes so we could reduce it four times
-    if unlikely((len + *offset) > packet.len() >> 2) {
+    if unlikely((len * 4 + *offset) > packet.len()) {
         Err(TlError::UnexpectedEof)
     } else {
         Ok(len)
