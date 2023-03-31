@@ -141,4 +141,29 @@ mod tests {
         assert_eq!(data.value, 1.0);
         assert_eq!(data.another, 123);
     }
+
+    #[test]
+    fn struct_with_last_vector() {
+        #[derive(TlRead)]
+        struct LastVector {
+            some_value: u64,
+            array: Vec<u64>,
+        }
+
+        let target = [
+            1, 2, 3, 4, 5, 6, 7, 8, // some_value
+            4, 0, 0, 0, // array len
+            1, 2, 3, 4, 5, 6, 7, 8, // array[0]
+            1, 2, 3, 4, 5, 6, 7, 8, // array[1]
+            1, 2, 3, 4, 5, 6, 7, 8, // array[2]
+            1, 2, 3, 4, 5, 6, 7, 8, // array[3]
+        ];
+        let data: LastVector = tl_proto::deserialize(&target).unwrap();
+        assert_eq!(data.array.len(), 4);
+
+        assert!(matches!(
+            tl_proto::deserialize::<LastVector>(&target[..40]),
+            Err(TlError::UnexpectedEof)
+        ));
+    }
 }

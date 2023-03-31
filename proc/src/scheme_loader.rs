@@ -131,11 +131,11 @@ impl<'s, 'a: 's> State<'s, 'a> {
     }
 }
 
-fn check_constructor<'a, 's>(
+fn check_constructor<'s>(
     output: &mut Option<(tl_scheme::ConstructorKind, tl_scheme::OutputType<'s>)>,
     cx: &ctxt::Ctxt,
     kind: tl_scheme::ConstructorKind,
-    constructor: &'s tl_scheme::Constructor<'a>,
+    constructor: &'s tl_scheme::Constructor<'_>,
     lit: &TokenStream,
 ) {
     match output {
