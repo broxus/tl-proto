@@ -13,7 +13,7 @@ pub fn impl_derive_tl_read(input: syn::DeriveInput) -> Result<TokenStream, Vec<s
     scheme_loader::compute_tl_ids(&cx, &mut container);
     cx.check()?;
 
-    let tl_lifetime: syn::LifetimeDef = syn::parse_quote!('tl);
+    let tl_lifetime: syn::LifetimeParam = syn::parse_quote!('tl);
 
     let ident = &container.ident;
     let generics = build_generics(&container);

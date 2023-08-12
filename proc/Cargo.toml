@@ -3,7 +3,7 @@ name = "tl-proto-proc"
 description = "A collection of traits for working with TL serialization/deserialization"
 authors = ["Ivan Kalinin <i.kalinin@dexpa.io>"]
 repository = "https://github.com/broxus/tl-proto"
-version = "0.4.1"
+version = "0.4.3"
 edition = "2021"
 include = ["src/**/*.rs", "../README.md"]
 license = "MIT"
@@ -15,5 +15,5 @@ proc-macro = true
 proc-macro2 = "1.0"
 quote = "1.0"
 rustc-hash = "1.1.0"
-syn = { version = "1.0", features = ["visit"] }
+syn = { version = "2.0", features = ["visit"] }
 tl-scheme = { version = "0.2.0", path = "../scheme" }
