@@ -1,6 +1,6 @@
 #[allow(dead_code)]
 mod tests {
-    use tl_proto::{BytesMeta, TlError, TlRead, TlResult};
+    use tl_proto::{BoundedBytes, BytesMeta, TlError, TlRead, TlResult};
 
     #[derive(TlRead)]
     struct SimpleStruct {
@@ -164,6 +164,24 @@ mod tests {
         assert!(matches!(
             tl_proto::deserialize::<LastVector>(&target[..40]),
             Err(TlError::UnexpectedEof)
+        ));
+    }
+
+    #[test]
+    fn bounded_bytes() {
+        #[derive(TlRead)]
+        struct Data<'tl> {
+            bytes: &'tl BoundedBytes<4>,
+        }
+
+        let packet = [4, 1, 2, 3, 4, 0, 0, 0];
+        let Data { bytes } = tl_proto::deserialize(&packet).unwrap();
+        assert_eq!(bytes.as_ref(), &[1, 2, 3, 4]);
+
+        let big_packet = [5, 1, 2, 3, 4, 5, 0, 0];
+        assert!(matches!(
+            tl_proto::deserialize::<Data>(&big_packet),
+            Err(TlError::InvalidData)
         ));
     }
 }
