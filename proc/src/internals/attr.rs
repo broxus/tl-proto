@@ -2,11 +2,38 @@ use std::hash::Hash;
 
 use proc_macro2::{Group, Span, TokenStream, TokenTree};
 use quote::ToTokens;
-use syn::Meta::{List, NameValue, Path};
-use syn::NestedMeta::{Lit, Meta};
+use syn::meta::ParseNestedMeta;
 
 use super::ctxt::*;
 use super::symbol::*;
+
+pub struct IdMacroInput(Vec<LegacyMeta>);
+
+impl syn::parse::Parse for IdMacroInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Self(
+            syn::punctuated::Punctuated::<LegacyMeta, syn::Token!(,)>::parse_terminated(input)?
+                .into_iter()
+                .collect(),
+        ))
+    }
+}
+
+pub enum LegacyMeta {
+    Lit(syn::Lit),
+    NameValue(syn::MetaNameValue),
+}
+
+impl syn::parse::Parse for LegacyMeta {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+        Ok(if lookahead.peek(syn::Ident) {
+            Self::NameValue(input.parse()?)
+        } else {
+            Self::Lit(input.parse()?)
+        })
+    }
+}
 
 pub struct IdMacro {
     pub id: TlId,
@@ -14,49 +41,48 @@ pub struct IdMacro {
 }
 
 impl IdMacro {
-    pub fn from_ast(cx: &Ctxt, outer: &TokenStream, items: &[syn::NestedMeta]) -> Option<Self> {
+    pub fn from_ast(cx: &Ctxt, outer: &TokenStream, args: &[LegacyMeta]) -> Option<Self> {
         let mut id = Attr::none(cx, ID);
         let mut scheme = Attr::none(cx, SCHEME);
 
-        for meta_item in items {
-            match &meta_item {
-                // Parse `0x123456` or "boolTrue"`
-                Lit(lit) => {
+        for meta in args {
+            match meta {
+                LegacyMeta::Lit(lit) => {
+                    // Parse `0x123456` or "boolTrue"`
                     if let Ok(n) = get_tl_id_inline(cx, lit) {
                         id.set(lit, n);
                     }
                 }
-                // Parse `#[tl(scheme = "path/to/scheme.tl")]`
-                Meta(NameValue(m)) if m.path == SCHEME => {
-                    if let Ok(n) = get_lit_str(cx, SCHEME, &m.lit) {
-                        scheme.set(
-                            &m.path,
-                            Scheme {
-                                original: m.to_token_stream(),
-                                source: SchemeSource::File { path: n.clone() },
-                            },
+                LegacyMeta::NameValue(meta) => {
+                    if meta.path == SCHEME {
+                        // Parse `#[tl(scheme = "path/to/scheme.tl")]`
+                        if let Ok(n) = get_lit_str_from_expr(cx, SCHEME, &meta.value) {
+                            scheme.set(
+                                &meta.path,
+                                Scheme {
+                                    original: meta.to_token_stream(),
+                                    source: SchemeSource::File { path: n.clone() },
+                                },
+                            );
+                        }
+                    } else if meta.path == SCHEME_INLINE {
+                        // Parse `#[tl(scheme_inline = "boolTrue = Bool")]`
+                        if let Ok(n) = get_lit_str_from_expr(cx, SCHEME_INLINE, &meta.value) {
+                            scheme.set(
+                                &meta.path,
+                                Scheme {
+                                    original: meta.to_token_stream(),
+                                    source: SchemeSource::Inline { content: n.clone() },
+                                },
+                            );
+                        }
+                    } else {
+                        let path = meta.path.to_token_stream().to_string().replace(' ', "");
+                        cx.error_spanned_by(
+                            meta,
+                            format_args!("unknown tl id attribute `{}`", path),
                         );
                     }
-                }
-                // Parse `#[tl(scheme_inline = "boolTrue = Bool")]`
-                Meta(NameValue(m)) if m.path == SCHEME_INLINE => {
-                    if let Ok(n) = get_lit_str(cx, SCHEME_INLINE, &m.lit) {
-                        scheme.set(
-                            &m.path,
-                            Scheme {
-                                original: m.to_token_stream(),
-                                source: SchemeSource::Inline { content: n.clone() },
-                            },
-                        );
-                    }
-                }
-                Meta(meta_item) => {
-                    let path = meta_item
-                        .path()
-                        .into_token_stream()
-                        .to_string()
-                        .replace(' ', "");
-                    cx.error_spanned_by(meta_item.path(), format!("unknown attribute `{}`", path));
                 }
             }
         }
@@ -98,67 +124,62 @@ impl Container {
         let mut scheme = Attr::none(cx, SCHEME);
         let mut size_hint = Attr::none(cx, SIZE_HINT);
 
-        for meta_item in item
-            .attrs
-            .iter()
-            .flat_map(|attr| get_meta_items(cx, attr))
-            .flatten()
-        {
-            match &meta_item {
-                // Parse `#[tl(boxed)]`
-                Meta(Path(word)) if word == BOXED => {
-                    boxed.set_true(word);
+        for attr in &item.attrs {
+            if attr.path() != TL {
+                continue;
+            }
+
+            if let syn::Meta::List(meta) = &attr.meta {
+                if meta.tokens.is_empty() {
+                    continue;
                 }
-                // Parse `#[tl(id = 0x123456)]` or `#[tl(id = "boolTrue"]`
-                Meta(NameValue(m)) if m.path == ID => {
-                    if let Ok(n) = get_tl_id(cx, ID, &m.lit) {
-                        id.set(&m.path, n);
+            }
+
+            if let Err(e) = attr.parse_nested_meta(|meta| {
+                if meta.path == BOXED {
+                    // Parse `#[tl(boxed)]`
+                    boxed.set_true(meta.path);
+                } else if meta.path == ID {
+                    // Parse `#[tl(id = 0x123456)]` or `#[tl(id = "boolTrue"]`
+                    if let Some(s) = get_tl_id(cx, ID, &meta)? {
+                        id.set(&meta.path, s);
                     }
-                }
-                // Parse `#[tl(scheme = "path/to/scheme.tl")]`
-                Meta(NameValue(m)) if m.path == SCHEME => {
-                    if let Ok(n) = get_lit_str(cx, SCHEME, &m.lit) {
+                } else if meta.path == SCHEME {
+                    // Parse `#[tl(scheme = "path/to/scheme.tl")]`
+                    if let Some(s) = get_lit_str(cx, SCHEME, &meta)? {
                         scheme.set(
-                            &m.path,
+                            &meta.path,
                             Scheme {
-                                original: m.to_token_stream(),
-                                source: SchemeSource::File { path: n.clone() },
+                                original: s.to_token_stream(),
+                                source: SchemeSource::File { path: s },
                             },
                         );
                     }
-                }
-                // Parse `#[tl(scheme_inline = "boolTrue = Bool")]`
-                Meta(NameValue(m)) if m.path == SCHEME_INLINE => {
-                    if let Ok(n) = get_lit_str(cx, SCHEME_INLINE, &m.lit) {
+                } else if meta.path == SCHEME_INLINE {
+                    // Parse `#[tl(scheme_inline = "boolTrue = Bool")]`
+                    if let Some(s) = get_lit_str(cx, SCHEME_INLINE, &meta)? {
                         scheme.set(
-                            &m.path,
+                            &meta.path,
                             Scheme {
-                                original: m.to_token_stream(),
-                                source: SchemeSource::Inline { content: n.clone() },
+                                original: s.to_token_stream(),
+                                source: SchemeSource::Inline { content: s.clone() },
                             },
                         );
                     }
-                }
-                // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
-                Meta(NameValue(m)) if m.path == SIZE_HINT => {
-                    if let Ok(h) = get_size_hint(cx, SIZE_HINT, &m.lit) {
-                        size_hint.set(&m.path, h);
+                } else if meta.path == SIZE_HINT {
+                    // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
+                    if let Some(s) = get_size_hint(cx, SIZE_HINT, &meta)? {
+                        size_hint.set(&meta.path, s);
                     }
-                }
-                Meta(meta_item) => {
-                    let path = meta_item
-                        .path()
-                        .into_token_stream()
-                        .to_string()
-                        .replace(' ', "");
-                    cx.error_spanned_by(
-                        meta_item.path(),
-                        format!("unknown tl container attribute `{}`", path),
+                } else {
+                    let path = meta.path.to_token_stream().to_string().replace(' ', "");
+                    return Err(
+                        meta.error(format_args!("unknown tl container attribute `{}`", path))
                     );
                 }
-                Lit(lit) => {
-                    cx.error_spanned_by(lit, "unexpected literal in tl container attribute");
-                }
+                Ok(())
+            }) {
+                cx.syn_error(e);
             }
         }
 
@@ -181,39 +202,35 @@ impl Variant {
         let mut id = Attr::none(cx, ID);
         let mut size_hint = Attr::none(cx, SIZE_HINT);
 
-        for meta_item in item
-            .attrs
-            .iter()
-            .flat_map(|attr| get_meta_items(cx, attr))
-            .flatten()
-        {
-            match &meta_item {
-                // Parse `#[tl(id = 0x123456)]` or `#[tl(id = "boolTrue"]`
-                Meta(NameValue(m)) if m.path == ID => {
-                    if let Ok(n) = get_tl_id(cx, ID, &m.lit) {
-                        id.set(&m.path, n);
+        for attr in &item.attrs {
+            if attr.path() != TL {
+                continue;
+            }
+
+            if let syn::Meta::List(meta) = &attr.meta {
+                if meta.tokens.is_empty() {
+                    continue;
+                }
+            }
+
+            if let Err(e) = attr.parse_nested_meta(|meta| {
+                if meta.path == ID {
+                    // Parse `#[tl(id = 0x123456)]` or `#[tl(id = "boolTrue"]`
+                    if let Some(s) = get_tl_id(cx, ID, &meta)? {
+                        id.set(&meta.path, s);
                     }
-                }
-                // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
-                Meta(NameValue(m)) if m.path == SIZE_HINT => {
-                    if let Ok(h) = get_size_hint(cx, SIZE_HINT, &m.lit) {
-                        size_hint.set(&m.path, h);
+                } else if meta.path == SIZE_HINT {
+                    // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
+                    if let Some(s) = get_size_hint(cx, SIZE_HINT, &meta)? {
+                        size_hint.set(&meta.path, s);
                     }
+                } else {
+                    let path = meta.path.to_token_stream().to_string().replace(' ', "");
+                    return Err(meta.error(format_args!("unknown tl variant attribute `{}`", path)));
                 }
-                Meta(meta_item) => {
-                    let path = meta_item
-                        .path()
-                        .into_token_stream()
-                        .to_string()
-                        .replace(' ', "");
-                    cx.error_spanned_by(
-                        meta_item.path(),
-                        format!("unknown tl container attribute `{}`", path),
-                    );
-                }
-                Lit(lit) => {
-                    cx.error_spanned_by(lit, "unexpected literal in tl container attribute");
-                }
+                Ok(())
+            }) {
+                cx.syn_error(e);
             }
         }
 
@@ -253,50 +270,52 @@ impl Field {
         let mut skip_read = BoolAttr::none(cx, SKIP_READ);
         let mut signature = BoolAttr::none(cx, SIGNATURE);
 
-        for meta_item in field
-            .attrs
-            .iter()
-            .flat_map(|attr| get_meta_items(cx, attr))
-            .flatten()
-        {
-            match &meta_item {
-                // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
-                Meta(NameValue(m)) if m.path == SIZE_HINT => {
-                    if let Ok(h) = get_size_hint(cx, SIZE_HINT, &m.lit) {
-                        size_hint.set(&m.path, h);
+        for attr in &field.attrs {
+            if attr.path() != TL {
+                continue;
+            }
+
+            if let syn::Meta::List(meta) = &attr.meta {
+                if meta.tokens.is_empty() {
+                    continue;
+                }
+            }
+
+            if let Err(e) = attr.parse_nested_meta(|meta| {
+                if meta.path == SIZE_HINT {
+                    // Parse `#[tl(size_hint = 10)]` or `#[tl(size_hint = "get_some_value()")]`
+                    if let Some(s) = get_size_hint(cx, SIZE_HINT, &meta)? {
+                        size_hint.set(&meta.path, s);
                     }
-                }
-                // Parse `#[tl(read_with = "some_function"]`
-                Meta(NameValue(m)) if m.path == READ_WITH => {
-                    if let Ok(expr) = parse_lit_into_expr(cx, READ_WITH, &m.lit) {
-                        read_with.set(&m.path, expr);
+                } else if meta.path == READ_WITH {
+                    // Parse `#[tl(read_with = "some_function"]`
+                    if let Some(expr) = parse_lit_into_expr(cx, READ_WITH, &meta)? {
+                        read_with.set(&meta.path, expr);
                     }
-                }
-                // Parse `#[tl(write_with = "some_function"]`
-                Meta(NameValue(m)) if m.path == WRITE_WITH => {
-                    if let Ok(expr) = parse_lit_into_expr(cx, WRITE_WITH, &m.lit) {
-                        write_with.set(&m.path, expr);
+                } else if meta.path == WRITE_WITH {
+                    // Parse `#[tl(write_with = "some_function"]`
+                    if let Some(expr) = parse_lit_into_expr(cx, WRITE_WITH, &meta)? {
+                        write_with.set(&meta.path, expr);
                     }
-                }
-                // Parse `#[tl(with = "some_module"]`
-                Meta(NameValue(m)) if m.path == WITH => {
-                    if let Ok(expr) = parse_lit_into_expr(cx, WITH, &m.lit) {
-                        with.set(&m.path, expr);
+                } else if meta.path == WITH {
+                    // Parse `#[tl(with = "some_module"]`
+                    if let Some(expr) = parse_lit_into_expr(cx, WITH, &meta)? {
+                        with.set(&meta.path, expr);
                     }
-                }
-                // Parse `#[tl(flags)]`
-                Meta(Path(word)) if word == FLAGS => {
-                    flags.set_true(word);
-                }
-                // Parse `#[tl(flags_bit = 0)]` or `#[tl(flags_bit = "field.0")]`
-                Meta(NameValue(m)) if m.path == FLAGS_BIT => {
-                    if let Ok((field, n)) = get_lit_flags_bit(cx, FLAGS_BIT, &m.lit) {
+                } else if meta.path == FLAGS {
+                    // Parse `#[tl(flags)]`
+                    if meta.path == FLAGS {
+                        flags.set_true(&meta.path);
+                    }
+                } else if meta.path == FLAGS_BIT {
+                    // Parse `#[tl(flags_bit = 0)]` or `#[tl(flags_bit = "field.0")]`
+                    if let Some((lit, field, n)) = get_lit_flags_bit(cx, FLAGS_BIT, &meta)? {
                         match (&flags_field, field) {
                             (None, Some(field)) => {
-                                flags_field = Some((m.lit.clone(), field));
+                                flags_field = Some((lit, field));
                             }
                             (Some((_, flags_field)), Some(field)) => cx.error_spanned_by(
-                                &m.lit,
+                                &lit,
                                 format!(
                                     "either #[tl(flags_field = \"{flags_field}\", flags_bit = {n})] \
                                     or #[tl(flags_bit = \"{field}.{n}\"] can be used"
@@ -304,55 +323,40 @@ impl Field {
                             ),
                             _ => {}
                         }
-                        flags_bit.set(&m.path, n);
+                        flags_bit.set(&meta.path, n);
                     }
-                }
-                // Parse `#[tl(flags_field = "field")]`
-                Meta(NameValue(m)) if m.path == FLAGS_FIELD => {
-                    if let Ok(field) = get_lit_str(cx, FLAGS_FIELD, &m.lit) {
+                } else if meta.path == FLAGS_FIELD {
+                    // Parse `#[tl(flags_field = "field")]`
+                    if let Some(field) = get_lit_str(cx, FLAGS_FIELD, &meta)? {
                         flags_field = Some((
                             syn::Lit::Str(field.clone()),
                             FlagsField::new(&field.value()),
                         ));
                     }
-                }
-                // Parse `#[tl(default_flags = 0x123123)]`
-                Meta(NameValue(m)) if m.path == DEFAULT_FLAGS => {
-                    if let Ok(n) = get_lit_number(cx, DEFAULT_FLAGS, &m.lit) {
-                        default_flags.set(&m.path, n);
+                } else if meta.path == DEFAULT_FLAGS {
+                    // Parse `#[tl(default_flags = 0x123123)]`
+                    if let Some(n) = get_lit_number(cx, DEFAULT_FLAGS, &meta)? {
+                        default_flags.set(&meta.path, n);
                     }
+                } else if meta.path == SKIP {
+                    // Parse `#[tl(skip)]`
+                    skip.set_true(&meta.path);
+                } else if meta.path == SKIP_WRITE {
+                    // Parse `#[tl(skip_write)]`
+                    skip_write.set_true(&meta.path);
+                } else if meta.path == SKIP_READ {
+                    // Parse `#[tl(skip_read)]`
+                    skip_read.set_true(&meta.path);
+                } else if meta.path == SIGNATURE {
+                    // Parse `#[tl(signature)]`
+                    signature.set_true(&meta.path);
+                } else {
+                    let path = meta.path.to_token_stream().to_string().replace(' ', "");
+                    return Err(meta.error(format_args!("unknown tl field attribute `{}`", path)));
                 }
-                // Parse `#[tl(skip)]`
-                Meta(Path(word)) if word == SKIP => {
-                    skip.set_true(word);
-                }
-                // Parse `#[tl(skip_write)]`
-                Meta(Path(word)) if word == SKIP_WRITE => {
-                    skip_write.set_true(word);
-                }
-                // Parse `#[tl(skip_read)]`
-                Meta(Path(word)) if word == SKIP_READ => {
-                    skip_read.set_true(word);
-                }
-                // Parse `#[tl(signature)]`
-                Meta(Path(word)) if word == SIGNATURE => {
-                    signature.set_true(word);
-                }
-                // Other
-                Meta(meta_item) => {
-                    let path = meta_item
-                        .path()
-                        .into_token_stream()
-                        .to_string()
-                        .replace(' ', "");
-                    cx.error_spanned_by(
-                        meta_item.path(),
-                        format!("unknown tl container attribute `{}`", path),
-                    );
-                }
-                Lit(lit) => {
-                    cx.error_spanned_by(lit, "unexpected literal in tl container attribute");
-                }
+                Ok(())
+            }) {
+                cx.syn_error(e);
             }
         }
 
@@ -416,50 +420,65 @@ pub enum SizeHint {
     Expression { expr: syn::Expr },
 }
 
-fn get_size_hint(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<SizeHint, ()> {
-    match lit {
-        syn::Lit::Int(literal) => match literal.base10_parse::<usize>() {
-            Ok(value) => Ok(SizeHint::Explicit { value }),
-            Err(e) => {
-                cx.syn_error(e);
-                Err(())
+fn get_size_hint(
+    cx: &Ctxt,
+    attr_name: Symbol,
+    meta: &ParseNestedMeta,
+) -> syn::Result<Option<SizeHint>> {
+    let expr: syn::Expr = meta.value()?.parse()?;
+    let mut value = &expr;
+    while let syn::Expr::Group(e) = value {
+        value = &e.expr;
+    }
+
+    Ok(match value {
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Int(lit),
+            ..
+        }) => Some(SizeHint::Explicit {
+            value: lit.base10_parse()?,
+        }),
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(lit),
+            ..
+        }) => {
+            let suffix = lit.suffix();
+            if !suffix.is_empty() {
+                cx.error_spanned_by(
+                    &expr,
+                    format!("unexpected suffix `{}` on string literal", suffix),
+                );
             }
-        },
-        syn::Lit::Str(expr) => match expr.parse::<syn::Expr>() {
-            Ok(expr) => Ok(SizeHint::Expression { expr }),
-            Err(e) => {
-                cx.syn_error(e);
-                Err(())
-            }
-        },
+            Some(SizeHint::Expression {
+                expr: lit.parse::<syn::Expr>()?,
+            })
+        }
         _ => {
             cx.error_spanned_by(
-                lit,
+                expr,
                 format!(
                     "expected tl {} attribute to be an integer \
                     or a string with expression: `{} = \"\"`",
-                    attr_name, attr_name
+                    attr_name, attr_name,
                 ),
             );
-            Err(())
+            None
         }
-    }
-}
-
-fn parse_lit_into_expr(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<syn::Expr, ()> {
-    let string = get_lit_str(cx, attr_name, lit)?;
-
-    parse_lit_str(string).map_err(|_| {
-        cx.error_spanned_by(lit, format!("failed to parse expr: {:?}", string.value()))
     })
 }
 
-fn parse_lit_str<T>(s: &syn::LitStr) -> syn::parse::Result<T>
-where
-    T: syn::parse::Parse,
-{
-    let tokens = spanned_tokens(s)?;
-    syn::parse2(tokens)
+fn parse_lit_into_expr(
+    cx: &Ctxt,
+    attr_name: Symbol,
+    meta: &ParseNestedMeta,
+) -> syn::Result<Option<syn::Expr>> {
+    let Some(s) = get_lit_str(cx, attr_name, meta)? else {
+        return Ok(None);
+    };
+
+    let tokens = spanned_tokens(&s)?;
+    let expr: syn::Expr = syn::parse2(tokens)?;
+    Ok(Some(expr))
 }
 
 fn spanned_tokens(s: &syn::LitStr) -> syn::parse::Result<TokenStream> {
@@ -482,13 +501,61 @@ fn respan_token_tree(mut token: TokenTree, span: Span) -> TokenTree {
     token
 }
 
-fn get_lit_str<'a>(cx: &Ctxt, attr_name: Symbol, lit: &'a syn::Lit) -> Result<&'a syn::LitStr, ()> {
-    if let syn::Lit::Str(lit) = lit {
-        Ok(lit)
+fn get_lit_str(
+    cx: &Ctxt,
+    attr_name: Symbol,
+    meta: &ParseNestedMeta,
+) -> syn::Result<Option<syn::LitStr>> {
+    get_lit_str2(cx, attr_name, attr_name, meta)
+}
+
+fn get_lit_str2(
+    cx: &Ctxt,
+    attr_name: Symbol,
+    meta_item_name: Symbol,
+    meta: &ParseNestedMeta,
+) -> syn::Result<Option<syn::LitStr>> {
+    let expr: syn::Expr = meta.value()?.parse()?;
+    Ok(get_lit_str_from_expr2(cx, attr_name, meta_item_name, &expr).ok())
+}
+
+fn get_lit_str_from_expr(
+    cx: &Ctxt,
+    attr_name: Symbol,
+    expr: &syn::Expr,
+) -> Result<syn::LitStr, ()> {
+    get_lit_str_from_expr2(cx, attr_name, attr_name, expr)
+}
+
+fn get_lit_str_from_expr2(
+    cx: &Ctxt,
+    attr_name: Symbol,
+    meta_item_name: Symbol,
+    mut expr: &syn::Expr,
+) -> Result<syn::LitStr, ()> {
+    while let syn::Expr::Group(e) = expr {
+        expr = &e.expr;
+    }
+    if let syn::Expr::Lit(syn::ExprLit {
+        lit: syn::Lit::Str(lit),
+        ..
+    }) = expr
+    {
+        let suffix = lit.suffix();
+        if !suffix.is_empty() {
+            cx.error_spanned_by(
+                lit,
+                format!("unexpected suffix `{}` on string literal", suffix),
+            );
+        }
+        Ok(lit.clone())
     } else {
         cx.error_spanned_by(
-            lit,
-            format!("expected {attr_name} attribute to be a string: `{attr_name} = \"...\"`",),
+            expr,
+            format!(
+                "expected {} attribute to be a string: `{} = \"...\"`",
+                attr_name, meta_item_name
+            ),
         );
         Err(())
     }
@@ -536,17 +603,48 @@ impl Hash for TlId {
     }
 }
 
-fn get_tl_id(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<TlId, ()> {
-    match lit {
-        syn::Lit::Str(literal) => Ok(TlId::FromScheme {
-            value: literal.value().trim().to_string(),
-            lit: literal.to_token_stream(),
-        }),
-        lit => Ok(TlId::Explicit {
-            value: get_lit_number(cx, attr_name, lit)?,
+fn get_tl_id(cx: &Ctxt, attr_name: Symbol, meta: &ParseNestedMeta) -> syn::Result<Option<TlId>> {
+    let expr: syn::Expr = meta.value()?.parse()?;
+    let mut value = &expr;
+    while let syn::Expr::Group(e) = value {
+        value = &e.expr;
+    }
+
+    Ok(match value {
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(lit),
+            ..
+        }) => {
+            let suffix = lit.suffix();
+            if !suffix.is_empty() {
+                cx.error_spanned_by(
+                    &expr,
+                    format!("unexpected suffix `{}` on string literal", suffix),
+                );
+            }
+            Some(TlId::FromScheme {
+                value: lit.value().trim().to_string(),
+                lit: lit.to_token_stream(),
+            })
+        }
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Int(lit),
+            ..
+        }) => Some(TlId::Explicit {
+            value: lit.base10_parse()?,
             lit: lit.to_token_stream(),
         }),
-    }
+        _ => {
+            cx.error_spanned_by(
+                expr,
+                format!(
+                    "expected tl {} attribute to be a string or integer: `{} = \"...\"`",
+                    attr_name, attr_name,
+                ),
+            );
+            None
+        }
+    })
 }
 
 fn get_tl_id_inline(cx: &Ctxt, lit: &syn::Lit) -> Result<TlId, ()> {
@@ -619,73 +717,87 @@ impl PartialEq<syn::Member> for FlagsField {
 fn get_lit_flags_bit(
     cx: &Ctxt,
     attr_name: Symbol,
-    lit: &syn::Lit,
-) -> Result<(Option<FlagsField>, u8), ()> {
-    if let syn::Lit::Int(lit) = lit {
-        return lit
-            .base10_parse()
-            .map(|b| (None, b))
-            .map_err(|err| cx.syn_error(err));
-    } else if let syn::Lit::Str(lit) = lit {
-        let string = lit.value();
-        let mut parts = string.split('.');
-        if let (Some(field), Some(bit), None) = (parts.next(), parts.next(), parts.next()) {
-            let bit = bit.trim();
-            let bit = match bit.strip_prefix("0x") {
-                Some(bit) => u8::from_str_radix(bit, 16),
-                None => bit.parse::<u8>(),
-            }
-            .map_err(|_| cx.error_spanned_by(lit, "failed to parse flags bit"))?;
-
-            return Ok((Some(FlagsField::new(field)), bit));
-        }
+    meta: &ParseNestedMeta,
+) -> syn::Result<Option<(syn::Lit, Option<FlagsField>, u8)>> {
+    let expr: syn::Expr = meta.value()?.parse()?;
+    let mut value = &expr;
+    while let syn::Expr::Group(e) = value {
+        value = &e.expr;
     }
 
+    match value {
+        syn::Expr::Lit(syn::ExprLit {
+            lit: lit @ syn::Lit::Int(l),
+            ..
+        }) => return Ok(Some((lit.clone(), None, l.base10_parse()?))),
+        syn::Expr::Lit(syn::ExprLit {
+            lit: lit @ syn::Lit::Str(l),
+            ..
+        }) => {
+            let suffix = l.suffix();
+            if !suffix.is_empty() {
+                cx.error_spanned_by(
+                    &expr,
+                    format!("unexpected suffix `{}` on string literal", suffix),
+                );
+            }
+
+            let string = l.value();
+            let mut parts = string.split('.');
+            if let (Some(field), Some(bit), None) = (parts.next(), parts.next(), parts.next()) {
+                let bit = bit.trim();
+                let Ok(bit) = (match bit.strip_prefix("0x") {
+                    Some(bit) => u8::from_str_radix(bit, 16),
+                    None => bit.parse::<u8>(),
+                }) else {
+                    cx.error_spanned_by(l, "failed to parse flags bit");
+                    return Ok(None);
+                };
+
+                return Ok(Some((lit.clone(), Some(FlagsField::new(field)), bit)));
+            }
+        }
+        _ => {}
+    };
+
     cx.error_spanned_by(
-        lit,
+        expr,
         format!(
             "expected tl {a} attribute to be an integer or a string: `{a} = 0` or `{a} = \"field.0\"`",
             a = attr_name,
         ),
     );
-    Err(())
+    Ok(None)
 }
 
-fn get_lit_number<T>(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<T, ()>
+fn get_lit_number<T>(cx: &Ctxt, attr_name: Symbol, meta: &ParseNestedMeta) -> syn::Result<Option<T>>
 where
     T: std::str::FromStr,
     T::Err: std::fmt::Display,
 {
-    if let syn::Lit::Int(lit) = lit {
-        lit.base10_parse().map_err(|err| cx.syn_error(err))
-    } else {
-        cx.error_spanned_by(
-            lit,
-            format!(
-                "expected tl {} attribute to be an integer: `{} = \"...\"`",
-                attr_name, attr_name,
-            ),
-        );
-        Err(())
+    let expr: syn::Expr = meta.value()?.parse()?;
+    let mut value = &expr;
+    while let syn::Expr::Group(e) = value {
+        value = &e.expr;
     }
-}
-
-fn get_meta_items(cx: &Ctxt, attr: &syn::Attribute) -> Result<Vec<syn::NestedMeta>, ()> {
-    if attr.path != TL {
-        return Ok(Vec::new());
-    }
-
-    match attr.parse_meta() {
-        Ok(List(meta)) => Ok(meta.nested.into_iter().collect()),
-        Ok(other) => {
-            cx.error_spanned_by(other, "expected #[tl(...)]");
-            Err(())
-        }
-        Err(err) => {
-            cx.syn_error(err);
-            Err(())
-        }
-    }
+    Ok(
+        if let syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Int(lit),
+            ..
+        }) = value
+        {
+            Some(lit.base10_parse()?)
+        } else {
+            cx.error_spanned_by(
+                expr,
+                format!(
+                    "expected tl {} attribute to be an integer: `{} = \"...\"`",
+                    attr_name, attr_name,
+                ),
+            );
+            None
+        },
+    )
 }
 
 struct BoolAttr<'c>(Attr<'c, ()>);

@@ -38,7 +38,7 @@ enum Derive {
 pub fn id(input: TokenStream) -> TokenStream {
     let meta = {
         let input = input.clone();
-        syn::parse_macro_input!(input as Vec<syn::NestedMeta>)
+        syn::parse_macro_input!(input as IdMacroInput)
     };
     impl_id(&input.into(), &meta)
         .unwrap_or_else(to_compile_errors)
