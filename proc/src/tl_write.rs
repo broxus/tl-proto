@@ -53,8 +53,11 @@ fn build_generics(container: &ast::Container) -> syn::Generics {
 
 fn build_enum(container: &ast::Container, variants: &[ast::Variant]) -> TokenStream {
     let build_field = |field: &ast::Field| match &field.member {
-        syn::Member::Named(member) => quote! { #member },
-        syn::Member::Unnamed(index) => quote::format_ident!("field_{}", index).to_token_stream(),
+        syn::Member::Named(member) => quote! { &#member },
+        syn::Member::Unnamed(index) => {
+            let member = quote::format_ident!("field_{}", index).to_token_stream();
+            quote! { &#member }
+        }
     };
 
     let max_size_hint = match &container.attrs.size_hint {
