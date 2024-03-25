@@ -7,18 +7,6 @@ use syn::meta::ParseNestedMeta;
 use super::ctxt::*;
 use super::symbol::*;
 
-pub struct IdMacroInput(Vec<LegacyMeta>);
-
-impl syn::parse::Parse for IdMacroInput {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(Self(
-            syn::punctuated::Punctuated::<LegacyMeta, syn::Token!(,)>::parse_terminated(input)?
-                .into_iter()
-                .collect(),
-        ))
-    }
-}
-
 pub enum LegacyMeta {
     Lit(syn::Lit),
     NameValue(syn::MetaNameValue),

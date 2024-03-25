@@ -104,6 +104,7 @@ mod tests {
     enum EnumWithFlags {
         Named {
             #[tl(flags)]
+            #[allow(unused)]
             flags: (),
             #[tl(flags_bit = 0)]
             value_1: Option<u32>,
@@ -114,6 +115,7 @@ mod tests {
     #[derive(TlWrite)]
     struct StructWithMultipleFlags {
         #[tl(flags, default_flags = 0x40000000)]
+        #[allow(unused)]
         flags: (),
         #[tl(flags_bit = "flags.0")]
         value_0: Option<u32>,
