@@ -301,7 +301,7 @@ where
 
                         other_field.attrs.flags_bit.map(|flags_bit| {
                             let field_name = build_field(other_field);
-                            quote! { ((*#field_name.is_some() as u32) << #flags_bit) }
+                            quote! { (((#field_name).is_some() as u32) << #flags_bit) }
                         })
                     }))
                     .collect::<Vec<_>>();
