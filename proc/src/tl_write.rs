@@ -71,7 +71,9 @@ fn build_enum(container: &ast::Container, variants: &[ast::Variant]) -> TokenStr
                 container,
                 variants,
                 |variant, field| {
-                    variant.attrs.size_hint.is_none() && field.attrs.size_hint.is_none()
+                    !field.attrs.flags
+                        && variant.attrs.size_hint.is_none()
+                        && field.attrs.size_hint.is_none()
                 },
                 |destructed, variant| {
                     let body = build_max_size_hint(
@@ -97,7 +99,7 @@ fn build_enum(container: &ast::Container, variants: &[ast::Variant]) -> TokenStr
         let variants = map_variants(
             container,
             variants,
-            |_, _| true,
+            |_, field| !field.attrs.flags,
             |destructed, variant| {
                 let body = build_write_to(
                     &variant.fields,
@@ -177,7 +179,7 @@ where
             }
             ast::Style::Tuple => {
                 let fields = variant.fields.iter().enumerate().map(|(i, field)| {
-                    if field.attrs.skip_write {
+                    if field.attrs.skip_write || !filter_fields(variant, field) {
                         quote! { _ }
                     } else {
                         quote::format_ident!("field_{}", i).to_token_stream()

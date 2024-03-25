@@ -35,8 +35,10 @@ mod tests {
         flags: (),
         #[tl(flags_bit = 0)]
         value_1: Option<u32>,
+        #[tl(flags_bit = 1)]
+        value_2: Option<()>,
         #[tl(flags_bit = 31)]
-        value_2: Option<bool>,
+        value_3: Option<bool>,
     }
 
     #[derive(TlRead)]
@@ -116,12 +118,23 @@ mod tests {
         }
 
         let target = [
-            0, 0, 0, 0x80, // flags
-            181, 117, 114, 153, // value_2: Some
+            0, 0, 0, 0x80, // flags (little-endian)
+            181, 117, 114, 153, // value_3: Some
         ];
         let data: StructWithFlags = tl_proto::deserialize(&target).unwrap();
         assert_eq!(data.value_1, None);
-        assert_eq!(data.value_2, Some(true));
+        assert_eq!(data.value_2, None);
+        assert_eq!(data.value_3, Some(true));
+
+        let target = [
+            0b11, 0, 0, 0x80, // flags (little-endian)
+            123, 0, 0, 0, // value_2: Some
+            181, 117, 114, 153, // value_3: Some
+        ];
+        let data: StructWithFlags = tl_proto::deserialize(&target).unwrap();
+        assert_eq!(data.value_1, Some(123));
+        assert_eq!(data.value_2, Some(()));
+        assert_eq!(data.value_3, Some(true));
 
         let target = [
             0u8, 0, 0, 0b01000000, // flags

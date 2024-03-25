@@ -1,6 +1,30 @@
 use crate::traits::*;
 use crate::util::*;
 
+impl TlRead<'_> for () {
+    type Repr = Bare;
+
+    fn read_from(_packet: &'_ [u8], _offset: &mut usize) -> TlResult<Self> {
+        Ok(())
+    }
+}
+
+impl TlWrite for () {
+    type Repr = Bare;
+
+    #[inline]
+    fn max_size_hint(&self) -> usize {
+        0
+    }
+
+    #[inline]
+    fn write_to<P>(&self, _packet: &mut P)
+    where
+        P: TlPacket,
+    {
+    }
+}
+
 impl TlRead<'_> for bool {
     type Repr = Boxed;
 

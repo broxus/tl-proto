@@ -96,15 +96,16 @@ mod tests {
         flags: (),
         #[tl(flags_bit = 0)]
         value_1: Option<u32>,
+        #[tl(flags_bit = 1)]
+        value_2: Option<()>,
         #[tl(flags_bit = "flags.31")]
-        value_2: Option<bool>,
+        value_3: Option<bool>,
     }
 
     #[derive(TlWrite)]
     enum EnumWithFlags {
         Named {
             #[tl(flags)]
-            #[allow(unused)]
             flags: (),
             #[tl(flags_bit = 0)]
             value_1: Option<u32>,
@@ -115,7 +116,6 @@ mod tests {
     #[derive(TlWrite)]
     struct StructWithMultipleFlags {
         #[tl(flags, default_flags = 0x40000000)]
-        #[allow(unused)]
         flags: (),
         #[tl(flags_bit = "flags.0")]
         value_0: Option<u32>,
@@ -207,12 +207,13 @@ mod tests {
         let object = StructWithFlags {
             flags: (),
             value_1: None,
-            value_2: Some(true),
+            value_2: Some(()),
+            value_3: Some(true),
         };
         assert_eq!(object.max_size_hint(), 4 + 4);
         let target = [
-            0u8, 0, 0, 0b11000000, // flags
-            181, 117, 114, 153, // value_2: Some
+            2, 0, 0, 0b11000000, // flags
+            181, 117, 114, 153, // value_3: Some
         ];
         let data = tl_proto::serialize(object);
         assert_eq!(&data, &target);
