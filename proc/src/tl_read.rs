@@ -57,7 +57,7 @@ pub fn impl_derive_tl_read(input: syn::DeriveInput) -> Result<TokenStream, Vec<s
         }
     };
 
-    Ok(dummy::wrap_in_const("TL_READ", ident, result))
+    Ok(dummy::wrap_in_const(result))
 }
 
 fn build_generics(container: &ast::Container) -> syn::Generics {

@@ -37,7 +37,7 @@ pub fn impl_derive_tl_write(input: syn::DeriveInput) -> Result<TokenStream, Vec<
         }
     };
 
-    Ok(dummy::wrap_in_const("TL_WRITE", ident, result))
+    Ok(dummy::wrap_in_const(result))
 }
 
 fn build_generics(container: &ast::Container) -> syn::Generics {
