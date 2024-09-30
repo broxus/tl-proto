@@ -206,6 +206,75 @@ impl TlPacket for bytes::BytesMut {
     }
 }
 
+/// A wrapper type for writing to [`std::io::Write`] types.
+///
+/// Ignores all errors afther the first one.
+/// The status can be retrieved using [`Writer::into_parts`].
+pub struct IoWriter<W> {
+    writer: W,
+    status: std::io::Result<()>,
+}
+
+impl<W> IoWriter<W> {
+    /// Creates a new writer.
+    pub const fn new(writer: W) -> Self {
+        Self {
+            writer,
+            status: Ok(()),
+        }
+    }
+
+    /// Gets a mutable reference to the underlying writer.
+    pub fn get_mut(&mut self) -> &mut W {
+        &mut self.writer
+    }
+
+    /// Gets a reference to the underlying writer.
+    pub fn get_ref(&self) -> &W {
+        &self.writer
+    }
+
+    /// Disassembles the [`Writer<W>`], returning the underlying writer, and the status.
+    pub fn into_parts(self) -> (W, std::io::Result<()>) {
+        (self.writer, self.status)
+    }
+}
+
+impl<W: std::io::Write> TlPacket for IoWriter<W> {
+    const TARGET: TlTarget = TlTarget::Packet;
+
+    #[inline(always)]
+    fn write_u32(&mut self, data: u32) {
+        if self.status.is_ok() {
+            self.status = self.writer.write_all(&data.to_le_bytes());
+        }
+    }
+
+    fn write_i32(&mut self, data: i32) {
+        if self.status.is_ok() {
+            self.status = self.writer.write_all(&data.to_le_bytes());
+        }
+    }
+
+    fn write_u64(&mut self, data: u64) {
+        if self.status.is_ok() {
+            self.status = self.writer.write_all(&data.to_le_bytes());
+        }
+    }
+
+    fn write_i64(&mut self, data: i64) {
+        if self.status.is_ok() {
+            self.status = self.writer.write_all(&data.to_le_bytes());
+        }
+    }
+
+    fn write_raw_slice(&mut self, data: &[u8]) {
+        if self.status.is_ok() {
+            self.status = self.writer.write_all(data);
+        }
+    }
+}
+
 /// TL packet type.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum TlTarget {
