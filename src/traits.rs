@@ -209,7 +209,7 @@ impl TlPacket for bytes::BytesMut {
 /// A wrapper type for writing to [`std::io::Write`] types.
 ///
 /// Ignores all errors afther the first one.
-/// The status can be retrieved using [`Writer::into_parts`].
+/// The status can be retrieved using [`IoWriter::into_parts`].
 pub struct IoWriter<W> {
     writer: W,
     status: std::io::Result<()>,
@@ -234,7 +234,7 @@ impl<W> IoWriter<W> {
         &self.writer
     }
 
-    /// Disassembles the [`Writer<W>`], returning the underlying writer, and the status.
+    /// Disassembles the [`IoWriter<W>`], returning the underlying writer, and the status.
     pub fn into_parts(self) -> (W, std::io::Result<()>) {
         (self.writer, self.status)
     }

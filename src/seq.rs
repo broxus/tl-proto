@@ -666,8 +666,9 @@ fn read_fixed_bytes<'a, const N: usize>(
     }
 }
 
+/// Computes the number of bytes required to encode the `[u8]` of the specified length.
 #[inline(always)]
-fn bytes_max_size_hint(mut len: usize) -> usize {
+pub const fn bytes_max_size_hint(mut len: usize) -> usize {
     if len < 254 {
         len += 1;
     } else {
@@ -729,38 +730,23 @@ fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
 #[inline(always)]
 fn compute_bytes_meta(packet: &[u8], offset: usize) -> TlResult<(usize, usize, usize)> {
     let packet_len = packet.len();
-
-    if unlikely(packet_len <= offset) {
+    if unlikely(packet_len <= offset + 4) {
         return Err(TlError::UnexpectedEof);
     }
 
-    // SAFETY: `current_offset` is guaranteed to be less than `packet_len`
-    // but the compiler is not able to eliminate bounds check
-    let first_bytes = unsafe { *packet.get_unchecked(offset) };
-    let (len, have_read) = if first_bytes != 254 {
-        (first_bytes as usize, 1)
+    let first_bytes = unsafe { packet.as_ptr().add(offset).cast::<u32>().read_unaligned() };
+    let (len, have_read) = if first_bytes & 0xff != SIZE_MAGIC as u32 {
+        ((first_bytes & 0xff) as usize, 1)
     } else {
-        if unlikely(packet_len <= offset + 3) {
-            return Err(TlError::UnexpectedEof);
-        }
-
-        let mut len;
-
-        // SAFETY: `current_offset + 3` is guaranteed to be less than `packet_len`
-        unsafe {
-            len = *packet.get_unchecked(offset + 1) as usize;
-            len |= (*packet.get_unchecked(offset + 2) as usize) << 8;
-            len |= (*packet.get_unchecked(offset + 3) as usize) << 16;
-        }
-
-        (len, 4)
+        ((first_bytes >> 8) as usize, 4)
     };
 
     let padding = (4 - (have_read + len) % 4) % 4;
-
     if unlikely(packet_len < offset + have_read + len + padding) {
         return Err(TlError::UnexpectedEof);
     }
 
     Ok((have_read, len, padding))
 }
+
+const SIZE_MAGIC: u8 = 254;
