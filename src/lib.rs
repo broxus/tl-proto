@@ -132,3 +132,8 @@ where
 {
     hash(data.into_boxed())
 }
+
+#[doc(hidden)]
+pub mod __internal {
+    pub use crate::util::unlikely;
+}

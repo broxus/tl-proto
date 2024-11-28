@@ -29,7 +29,10 @@ impl<T> TlPacket for DigestWriter<'_, T>
 where
     T: digest::Update,
 {
-    const TARGET: TlTarget = TlTarget::Hasher;
+    #[inline(always)]
+    fn ignore_signature(&self) -> bool {
+        true
+    }
 
     #[inline(always)]
     fn write_u32(&mut self, data: u32) {
@@ -69,7 +72,10 @@ where
 struct HashWriter<'a>(pub &'a mut dyn Hasher);
 
 impl<'a> TlPacket for HashWriter<'a> {
-    const TARGET: TlTarget = TlTarget::Hasher;
+    #[inline(always)]
+    fn ignore_signature(&self) -> bool {
+        true
+    }
 
     #[inline(always)]
     fn write_u32(&mut self, data: u32) {
