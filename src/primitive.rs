@@ -1,10 +1,9 @@
 use crate::traits::*;
-use crate::util::*;
 
 impl TlRead<'_> for () {
     type Repr = Bare;
 
-    fn read_from(_packet: &'_ [u8], _offset: &mut usize) -> TlResult<Self> {
+    fn read_from(_packet: &mut &'_ [u8]) -> TlResult<Self> {
         Ok(())
     }
 }
@@ -28,8 +27,8 @@ impl TlWrite for () {
 impl TlRead<'_> for bool {
     type Repr = Boxed;
 
-    fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
-        match u32::read_from(packet, offset) {
+    fn read_from(packet: &mut &'_ [u8]) -> TlResult<Self> {
+        match u32::read_from(packet) {
             Ok(BOOL_TRUE) => Ok(true),
             Ok(BOOL_FALSE) => Ok(false),
             Ok(_) => Err(TlError::UnknownConstructor),
@@ -61,15 +60,14 @@ macro_rules! impl_read_from_packet(
             type Repr = Bare;
 
             #[inline(always)]
-            fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
-                if unlikely(packet.len() < *offset + std::mem::size_of::<$ty>()) {
-                    Err(TlError::UnexpectedEof)
-                } else {
-                    let value = <$ty>::from_le_bytes(unsafe {
-                        *(packet.as_ptr().add(*offset) as *const [u8; std::mem::size_of::<$ty>()])
-                    });
-                    *offset += std::mem::size_of::<$ty>();
-                    Ok(value)
+            fn read_from(packet: &mut &'_ [u8]) -> TlResult<Self> {
+                match packet.split_first_chunk() {
+                    Some((first, tail)) => {
+                        let value = <$ty>::from_le_bytes(*first);
+                        *packet = tail;
+                        Ok(value)
+                    }
+                    None => Err(TlError::UnexpectedEof),
                 }
             }
         }
@@ -233,8 +231,8 @@ macro_rules! impl_non_zero {
             type Repr = Bare;
 
             #[inline(always)]
-            fn read_from(packet: &[u8], offset: &mut usize) -> TlResult<Self> {
-                match <$ty>::new(<$read_ty>::read_from(packet, offset)?) {
+            fn read_from(packet: &mut &'_ [u8]) -> TlResult<Self> {
+                match <$ty>::new(<$read_ty>::read_from(packet)?) {
                     Some(value) => Ok(value),
                     None => Err(TlError::InvalidData),
                 }
@@ -276,71 +274,67 @@ mod test {
     fn read_non_zero() {
         // u32
         assert!(matches!(
-            std::num::NonZeroU32::read_from(&[0, 0], &mut 0).unwrap_err(),
+            std::num::NonZeroU32::read_from(&mut [0, 0].as_ref()).unwrap_err(),
             TlError::UnexpectedEof
         ));
         assert!(matches!(
-            std::num::NonZeroU32::read_from(&[0, 0, 0, 0], &mut 0).unwrap_err(),
+            std::num::NonZeroU32::read_from(&mut [0, 0, 0, 0].as_ref()).unwrap_err(),
             TlError::InvalidData
         ));
-        let mut offset = 0;
+        let mut packet: &[u8] = &[123, 0, 0, 0];
         assert_eq!(
-            std::num::NonZeroU32::read_from(&[123, 0, 0, 0], &mut offset).unwrap(),
+            std::num::NonZeroU32::read_from(&mut packet).unwrap(),
             std::num::NonZeroU32::new(123).unwrap(),
         );
-        assert_eq!(offset, 4);
+        assert!(packet.is_empty());
 
         // i32
         assert!(matches!(
-            std::num::NonZeroI32::read_from(&[0, 0], &mut 0).unwrap_err(),
+            std::num::NonZeroI32::read_from(&mut [0, 0].as_ref()).unwrap_err(),
             TlError::UnexpectedEof
         ));
         assert!(matches!(
-            std::num::NonZeroI32::read_from(&[0, 0, 0, 0], &mut 0).unwrap_err(),
+            std::num::NonZeroI32::read_from(&mut [0, 0, 0, 0].as_ref()).unwrap_err(),
             TlError::InvalidData
         ));
-        let mut offset = 0;
+        let mut packet: &[u8] = &[0xfe, 0xff, 0xff, 0xff];
         assert_eq!(
-            std::num::NonZeroI32::read_from(&[0xfe, 0xff, 0xff, 0xff], &mut offset).unwrap(),
+            std::num::NonZeroI32::read_from(&mut packet).unwrap(),
             std::num::NonZeroI32::new(-2).unwrap(),
         );
-        assert_eq!(offset, 4);
+        assert!(packet.is_empty());
 
         // u64
         assert!(matches!(
-            std::num::NonZeroU64::read_from(&[0, 0, 0, 0], &mut 0).unwrap_err(),
+            std::num::NonZeroU64::read_from(&mut [0, 0, 0, 0].as_ref()).unwrap_err(),
             TlError::UnexpectedEof
         ));
         assert!(matches!(
-            std::num::NonZeroU64::read_from(&[0, 0, 0, 0, 0, 0, 0, 0], &mut 0).unwrap_err(),
+            std::num::NonZeroU64::read_from(&mut [0, 0, 0, 0, 0, 0, 0, 0].as_ref()).unwrap_err(),
             TlError::InvalidData
         ));
-        let mut offset = 0;
+        let mut packet: &[u8] = &[123, 0, 0, 0, 0, 0, 0, 0];
         assert_eq!(
-            std::num::NonZeroU64::read_from(&[123, 0, 0, 0, 0, 0, 0, 0], &mut offset).unwrap(),
+            std::num::NonZeroU64::read_from(&mut packet).unwrap(),
             std::num::NonZeroU64::new(123).unwrap(),
         );
-        assert_eq!(offset, 8);
+        assert!(packet.is_empty());
 
         // i64
         assert!(matches!(
-            std::num::NonZeroI64::read_from(&[0, 0, 0, 0], &mut 0).unwrap_err(),
+            std::num::NonZeroI64::read_from(&mut [0, 0, 0, 0].as_ref()).unwrap_err(),
             TlError::UnexpectedEof
         ));
 
         assert!(matches!(
-            std::num::NonZeroI64::read_from(&[0, 0, 0, 0, 0, 0, 0, 0], &mut 0).unwrap_err(),
+            std::num::NonZeroI64::read_from(&mut [0, 0, 0, 0, 0, 0, 0, 0].as_ref()).unwrap_err(),
             TlError::InvalidData
         ));
-        let mut offset = 0;
+        let mut packet: &[u8] = &[0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
         assert_eq!(
-            std::num::NonZeroI64::read_from(
-                &[0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
-                &mut offset
-            )
-            .unwrap(),
+            std::num::NonZeroI64::read_from(&mut packet,).unwrap(),
             std::num::NonZeroI64::new(-2).unwrap(),
         );
-        assert_eq!(offset, 8);
+        assert!(packet.is_empty());
     }
 }

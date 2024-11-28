@@ -56,9 +56,9 @@ where
 {
     type Repr = Boxed;
 
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        match u32::read_from(packet, offset) {
-            Ok(id) if id == T::TL_ID => match T::read_from(packet, offset) {
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        match u32::read_from(packet) {
+            Ok(id) if id == T::TL_ID => match T::read_from(packet) {
                 Ok(data) => Ok(BoxedWrapper(data)),
                 Err(e) => Err(e),
             },

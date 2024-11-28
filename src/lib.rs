@@ -32,11 +32,11 @@ mod tuple;
 mod util;
 
 /// Tries to deserialize `T` from the TL representation.
-pub fn deserialize<'a, T>(packet: &'a [u8]) -> TlResult<T>
+pub fn deserialize<'a, T>(mut packet: &'a [u8]) -> TlResult<T>
 where
     T: TlRead<'a>,
 {
-    T::read_from(packet, &mut 0)
+    T::read_from(&mut packet)
 }
 
 /// Tries to deserialize `T` as boxed from the TL representation.

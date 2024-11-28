@@ -69,29 +69,23 @@ mod tests {
         signature: &'tl [u8],
     }
 
-    fn read_f32(mut packet: &[u8], offset: &mut usize) -> TlResult<f32> {
-        use std::io::Read;
-
-        let mut bytes = [0; 4];
-        packet
-            .read_exact(&mut bytes)
-            .map_err(|_| TlError::UnexpectedEof)?;
-        *offset += 4;
-        Ok(u32::from_le_bytes(bytes) as f32)
+    fn read_f32(packet: &mut &[u8]) -> TlResult<f32> {
+        let Some((bytes, tail)) = packet.split_first_chunk() else {
+            return Err(TlError::UnexpectedEof);
+        };
+        *packet = tail;
+        Ok(u32::from_le_bytes(*bytes) as f32)
     }
 
     mod tl_u128 {
         use super::*;
 
-        pub fn read(packet: &[u8], offset: &mut usize) -> TlResult<u128> {
-            use std::io::Read;
-
-            let mut bytes = [0; 16];
-            (&packet[*offset..])
-                .read_exact(&mut bytes)
-                .map_err(|_| TlError::UnexpectedEof)?;
-            *offset += 16;
-            Ok(u128::from_be_bytes(bytes))
+        pub fn read(packet: &mut &[u8]) -> TlResult<u128> {
+            let Some((bytes, tail)) = packet.split_first_chunk() else {
+                return Err(TlError::UnexpectedEof);
+            };
+            *packet = tail;
+            Ok(u128::from_be_bytes(*bytes))
         }
     }
 

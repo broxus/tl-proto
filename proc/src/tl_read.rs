@@ -119,8 +119,8 @@ fn build_enum(variants: &[ast::Variant]) -> TokenStream {
     });
 
     quote! {
-        fn read_from(__packet: &'tl [u8], __offset: &mut usize) -> _tl_proto::TlResult<Self> {
-            match u32::read_from(__packet, __offset) {
+        fn read_from(__packet: &mut &'tl [u8]) -> _tl_proto::TlResult<Self> {
+            match u32::read_from(__packet) {
                 Ok(constructor) => match constructor {
                     #(#variants)*
                     _ => Err(_tl_proto::TlError::UnknownConstructor)
@@ -145,7 +145,7 @@ fn build_struct(
         .map(|id| {
             let id = id.unwrap_explicit();
             quote! {
-                match u32::read_from(__packet, __offset) {
+                match u32::read_from(__packet) {
                     Ok(constructor) => {
                         if constructor != #id {
                             return Err(_tl_proto::TlError::UnknownConstructor)
@@ -160,7 +160,7 @@ fn build_struct(
     let read_from = build_read_from(quote! { Self }, style, fields);
 
     quote! {
-        fn read_from(__packet: &'tl [u8], __offset: &mut usize) -> _tl_proto::TlResult<Self> {
+        fn read_from(__packet: &mut &'tl [u8]) -> _tl_proto::TlResult<Self> {
             #(#prefix)*
             #read_from
         }
@@ -194,7 +194,7 @@ fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]
 
         if field.attrs.flags {
             quote! {
-                let #ident = match <u32 as _tl_proto::TlRead<'tl>>::read_from(__packet, __offset) {
+                let #ident = match <u32 as _tl_proto::TlRead<'tl>>::read_from(__packet) {
                     Ok(flags) => flags,
                     Err(e) => return Err(e),
                 };
@@ -210,14 +210,14 @@ fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]
 
             let read = if let Some(with) = &field.attrs.with {
                 quote! {
-                    match #with::read(__packet, __offset) {
+                    match #with::read(__packet) {
                         Ok(value) => value,
                         Err(e) => return Err(e),
                     }
                 }
             } else if let Some(read_with) = &field.attrs.read_with {
                 quote! {
-                    match #read_with(__packet, __offset) {
+                    match #read_with(__packet) {
                         Ok(value) => value,
                         Err(e) => return Err(e),
                     }
@@ -225,7 +225,7 @@ fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]
             } else {
                 quote! {
                     match <<#ty as IntoIterator>::Item as _tl_proto::TlRead<'tl>>::read_from(
-                        __packet, __offset,
+                        __packet,
                     ) {
                         Ok(value) => value,
                         Err(e) => return Err(e),
@@ -242,21 +242,21 @@ fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]
             }
         } else if let Some(with) = &field.attrs.with {
             quote! {
-                let #ident = match #with::read(__packet, __offset) {
+                let #ident = match #with::read(__packet) {
                     Ok(value) => value,
                     Err(e) => return Err(e),
                 };
             }
         } else if let Some(read_with) = &field.attrs.read_with {
             quote! {
-                let #ident = match #read_with(__packet, __offset) {
+                let #ident = match #read_with(__packet) {
                     Ok(value) => value,
                     Err(e) => return Err(e),
                 };
             }
         } else {
             quote! {
-                let #ident = match <#ty as _tl_proto::TlRead<'tl>>::read_from(__packet, __offset) {
+                let #ident = match <#ty as _tl_proto::TlRead<'tl>>::read_from(__packet) {
                     Ok(value) => value,
                     Err(e) => return Err(e),
                 };

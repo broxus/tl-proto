@@ -24,7 +24,7 @@ pub trait TlRead<'a>: Sized {
     type Repr: Repr;
 
     /// Tries to read itself from bytes at the specified offset, incrementing that offset.
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self>;
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self>;
 }
 
 impl<'a, T> TlRead<'a> for Arc<T>
@@ -34,8 +34,8 @@ where
     type Repr = T::Repr;
 
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        match T::read_from(packet, offset) {
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        match T::read_from(packet) {
             Ok(data) => Ok(Arc::new(data)),
             Err(e) => Err(e),
         }
@@ -49,8 +49,8 @@ where
     type Repr = T::Repr;
 
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        match T::read_from(packet, offset) {
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        match T::read_from(packet) {
             Ok(data) => Ok(Box::new(data)),
             Err(e) => Err(e),
         }

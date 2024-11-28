@@ -20,8 +20,8 @@ impl<'a> TlRead<'a> for BytesMeta {
     type Repr = Bare;
 
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        match compute_bytes_meta(packet, *offset) {
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        match compute_bytes_meta(packet) {
             Ok((prefix_len, len, padding)) => Ok(Self {
                 prefix_len,
                 len,
@@ -37,8 +37,8 @@ impl<'a> TlRead<'a> for &'a [u8] {
     type Repr = Bare;
 
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        read_bytes(packet, offset)
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        read_bytes(packet)
     }
 }
 
@@ -65,8 +65,8 @@ impl<'a> TlRead<'a> for Box<[u8]> {
     type Repr = Bare;
 
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        Ok(Box::from(ok!(read_bytes(packet, offset))))
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        Ok(Box::from(ok!(read_bytes(packet))))
     }
 }
 
@@ -93,8 +93,8 @@ impl<'a> TlRead<'a> for Vec<u8> {
     type Repr = Bare;
 
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        match read_bytes(packet, offset) {
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        match read_bytes(packet) {
             Ok(bytes) => Ok(bytes.to_vec()),
             Err(e) => Err(e),
         }
@@ -125,9 +125,9 @@ impl TlRead<'_> for bytes::Bytes {
     type Repr = Bare;
 
     #[inline(always)]
-    fn read_from(packet: &'_ [u8], offset: &mut usize) -> TlResult<Self> {
-        match read_bytes(packet, offset) {
-            Ok(bytes) => Ok(bytes::Bytes::from(Box::from(bytes))),
+    fn read_from(packet: &mut &'_ [u8]) -> TlResult<Self> {
+        match read_bytes(packet) {
+            Ok(bytes) => Ok(bytes::Bytes::copy_from_slice(bytes)),
             Err(e) => Err(e),
         }
     }
@@ -157,8 +157,8 @@ impl<'a, const N: usize> TlRead<'a> for &'a [u8; N] {
     type Repr = Bare;
 
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        read_fixed_bytes(packet, offset)
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        read_fixed_bytes(packet)
     }
 }
 
@@ -167,8 +167,8 @@ impl<'a, const N: usize> TlRead<'a> for [u8; N] {
     type Repr = Bare;
 
     #[inline(always)]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        match read_fixed_bytes(packet, offset) {
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        match read_fixed_bytes(packet) {
             Ok(data) => Ok(*data),
             Err(e) => Err(e),
         }
@@ -201,12 +201,12 @@ where
 {
     type Repr = Bare;
 
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let len = ok!(read_vector_len(packet, offset));
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        let len = ok!(read_vector_len(packet));
 
         let mut items = SmallVec::<[T; N]>::with_capacity(len);
         for _ in 0..len {
-            items.push(ok!(TlRead::read_from(packet, offset)));
+            items.push(ok!(TlRead::read_from(packet)));
         }
         Ok(items)
     }
@@ -219,12 +219,12 @@ where
 {
     type Repr = Bare;
 
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let len = ok!(read_vector_len(packet, offset));
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        let len = ok!(read_vector_len(packet));
 
         let mut items = Vec::with_capacity(len);
         for _ in 0..len {
-            items.push(ok!(TlRead::read_from(packet, offset)));
+            items.push(ok!(TlRead::read_from(packet)));
         }
         Ok(items)
     }
@@ -393,27 +393,30 @@ impl<'a, const N: usize> TlRead<'a> for &'a BoundedBytes<N> {
     type Repr = Bare;
 
     #[inline]
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
         fn read_bytes_with_max_len<'a>(
-            packet: &'a [u8],
+            packet: &mut &'a [u8],
             max_len: usize,
-            offset: &mut usize,
         ) -> TlResult<&'a [u8]> {
-            let current_offset = *offset;
-            let (prefix_len, len, padding) = ok!(compute_bytes_meta(packet, current_offset));
+            let (prefix_len, len, padding) = ok!(compute_bytes_meta(packet));
             if len > max_len {
                 return Err(TlError::InvalidData);
             }
 
-            let result = unsafe {
-                std::slice::from_raw_parts(packet.as_ptr().add(current_offset + prefix_len), len)
-            };
+            let packet_ptr = packet.as_ptr();
+            let result = unsafe { std::slice::from_raw_parts(packet_ptr.add(prefix_len), len) };
 
-            *offset += prefix_len + len + padding;
+            let skip_len = prefix_len + len + padding;
+            *packet = unsafe {
+                std::slice::from_raw_parts(
+                    packet_ptr.add(skip_len),
+                    packet.len().unchecked_sub(skip_len),
+                )
+            };
             Ok(result)
         }
 
-        let result = ok!(read_bytes_with_max_len(packet, N, offset));
+        let result = ok!(read_bytes_with_max_len(packet, N));
 
         // SAFETY: `len <= N`
         Ok(unsafe { BoundedBytes::wrap_unchecked(result) })
@@ -457,9 +460,9 @@ where
 {
     type Repr = Bare;
 
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        match read_bytes(packet, offset) {
-            Ok(intermediate) => match T::read_from(intermediate, &mut 0) {
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        match read_bytes(packet) {
+            Ok(mut intermediate) => match T::read_from(&mut intermediate) {
                 Ok(data) => Ok(IntermediateBytes(data)),
                 Err(e) => Err(e),
             },
@@ -542,10 +545,11 @@ impl<R> Clone for RawBytes<'_, R> {
 impl<'a, R: Repr> TlRead<'a> for RawBytes<'a, R> {
     type Repr = R;
 
-    fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-        let len = packet.len() - std::cmp::min(*offset, packet.len());
-        let result = unsafe { std::slice::from_raw_parts(packet.as_ptr().add(*offset), len) };
-        *offset += len;
+    fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+        let result = *packet;
+        // NOTE: Assign the end of the packet instead of just empty slice to
+        //       to leave the pointer at the same location.
+        *packet = &packet[packet.len()..];
         Ok(Self::new(result))
     }
 }
@@ -614,8 +618,8 @@ impl<R> AsRef<[u8]> for OwnedRawBytes<R> {
 impl<R: Repr> TlRead<'_> for OwnedRawBytes<R> {
     type Repr = R;
 
-    fn read_from(packet: &'_ [u8], offset: &mut usize) -> TlResult<Self> {
-        match RawBytes::<R>::read_from(packet, offset) {
+    fn read_from(packet: &mut &'_ [u8]) -> TlResult<Self> {
+        match RawBytes::<R>::read_from(packet) {
             Ok(RawBytes(inner, ..)) => Ok(Self::new(inner.to_vec())),
             Err(e) => Err(e),
         }
@@ -640,12 +644,12 @@ impl<R: Repr> TlWrite for OwnedRawBytes<R> {
 }
 
 #[inline(always)]
-fn read_vector_len(packet: &[u8], offset: &mut usize) -> TlResult<usize> {
-    let len = ok!(u32::read_from(packet, offset)) as usize;
+fn read_vector_len(packet: &mut &[u8]) -> TlResult<usize> {
+    let len = ok!(u32::read_from(packet)) as usize;
 
     // Length cannot be greater than the rest of the packet.
     // However min item size is 4 bytes so we could reduce it four times
-    if unlikely((len * 4 + *offset) > packet.len()) {
+    if unlikely((len * 4) > packet.len()) {
         Err(TlError::UnexpectedEof)
     } else {
         Ok(len)
@@ -653,16 +657,13 @@ fn read_vector_len(packet: &[u8], offset: &mut usize) -> TlResult<usize> {
 }
 
 #[inline(always)]
-fn read_fixed_bytes<'a, const N: usize>(
-    packet: &'a [u8],
-    offset: &mut usize,
-) -> TlResult<&'a [u8; N]> {
-    if unlikely(packet.len() < *offset + N) {
-        Err(TlError::UnexpectedEof)
-    } else {
-        let ptr = unsafe { &*(packet.as_ptr().add(*offset) as *const [u8; N]) };
-        *offset += N;
-        Ok(ptr)
+fn read_fixed_bytes<'a, const N: usize>(packet: &mut &'a [u8]) -> TlResult<&'a [u8; N]> {
+    match packet.split_first_chunk() {
+        Some((chunk, tail)) => {
+            *packet = tail;
+            Ok(chunk)
+        }
+        None => Err(TlError::UnexpectedEof),
     }
 }
 
@@ -706,21 +707,24 @@ where
 
     let remainder = have_written % 4;
     if remainder != 0 {
-        let buf = [0u8; 4];
-        packet.write_raw_slice(&buf[remainder..]);
+        packet.write_raw_slice(&[0u8; 4][remainder..]);
     }
 }
 
 #[inline(always)]
-fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
-    let current_offset = *offset;
-    let (prefix_len, len, padding) = ok!(compute_bytes_meta(packet, current_offset));
+fn read_bytes<'a>(packet: &mut &'a [u8]) -> TlResult<&'a [u8]> {
+    let (prefix_len, len, padding) = ok!(compute_bytes_meta(packet));
 
-    let result = unsafe {
-        std::slice::from_raw_parts(packet.as_ptr().add(current_offset + prefix_len), len)
+    let packet_ptr = packet.as_ptr();
+    let result = unsafe { std::slice::from_raw_parts(packet_ptr.add(prefix_len), len) };
+
+    let skip_len = prefix_len + len + padding;
+    *packet = unsafe {
+        std::slice::from_raw_parts(
+            packet_ptr.add(skip_len),
+            packet.len().unchecked_sub(skip_len),
+        )
     };
-
-    *offset += prefix_len + len + padding;
     Ok(result)
 }
 
@@ -728,13 +732,13 @@ fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
 ///
 /// Returns **prefix length**, **bytes length** and **padding length**
 #[inline(always)]
-fn compute_bytes_meta(packet: &[u8], offset: usize) -> TlResult<(usize, usize, usize)> {
+fn compute_bytes_meta(packet: &[u8]) -> TlResult<(usize, usize, usize)> {
     let packet_len = packet.len();
-    if unlikely(packet_len <= offset + 4) {
+    if unlikely(packet_len < 4) {
         return Err(TlError::UnexpectedEof);
     }
 
-    let first_bytes = unsafe { packet.as_ptr().add(offset).cast::<u32>().read_unaligned() };
+    let first_bytes = unsafe { packet.as_ptr().cast::<u32>().read_unaligned() };
     let (len, have_read) = if first_bytes & 0xff != SIZE_MAGIC as u32 {
         ((first_bytes & 0xff) as usize, 1)
     } else {
@@ -742,7 +746,7 @@ fn compute_bytes_meta(packet: &[u8], offset: usize) -> TlResult<(usize, usize, u
     };
 
     let padding = (4 - (have_read + len) % 4) % 4;
-    if unlikely(packet_len < offset + have_read + len + padding) {
+    if unlikely(packet_len < have_read + len + padding) {
         return Err(TlError::UnexpectedEof);
     }
 
@@ -750,3 +754,13 @@ fn compute_bytes_meta(packet: &[u8], offset: usize) -> TlResult<(usize, usize, u
 }
 
 const SIZE_MAGIC: u8 = 254;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_small_slice() {
+        assert_eq!(read_bytes(&mut [1, 123, 0, 0].as_ref()).unwrap(), &[123]);
+    }
+}
