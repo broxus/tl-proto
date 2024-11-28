@@ -342,10 +342,10 @@ where
 
                     if field.attrs.signature {
                         quote! {
-                        if <P_ as _tl_proto::TlPacket>::TARGET == _tl_proto::TlTarget::Packet {
-                            #write_to
-                        } else {
+                        if _tl_proto::__internal::unlikely(<P_ as _tl_proto::TlPacket>::ignore_signature(__packet)) {
                             <&[u8] as _tl_proto::TlWrite>::write_to::<P_>(&[].as_ref(), __packet);
+                        } else {
+                            #write_to
                         }
                     }
                     } else {

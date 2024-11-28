@@ -132,8 +132,8 @@ where
 
 /// TL packet interface.
 pub trait TlPacket {
-    /// TL packet type.
-    const TARGET: TlTarget;
+    /// Whether this packet type excludes signatures.
+    fn ignore_signature(&self) -> bool;
 
     /// Writes `u32` to the packet.
     fn write_u32(&mut self, data: u32);
@@ -148,7 +148,10 @@ pub trait TlPacket {
 }
 
 impl TlPacket for Vec<u8> {
-    const TARGET: TlTarget = TlTarget::Packet;
+    #[inline(always)]
+    fn ignore_signature(&self) -> bool {
+        false
+    }
 
     #[inline(always)]
     fn write_u32(&mut self, data: u32) {
@@ -178,7 +181,10 @@ impl TlPacket for Vec<u8> {
 
 #[cfg(feature = "bytes")]
 impl TlPacket for bytes::BytesMut {
-    const TARGET: TlTarget = TlTarget::Packet;
+    #[inline(always)]
+    fn ignore_signature(&self) -> bool {
+        false
+    }
 
     #[inline(always)]
     fn write_u32(&mut self, data: u32) {
@@ -241,7 +247,10 @@ impl<W> IoWriter<W> {
 }
 
 impl<W: std::io::Write> TlPacket for IoWriter<W> {
-    const TARGET: TlTarget = TlTarget::Packet;
+    #[inline(always)]
+    fn ignore_signature(&self) -> bool {
+        false
+    }
 
     #[inline(always)]
     fn write_u32(&mut self, data: u32) {
@@ -273,15 +282,6 @@ impl<W: std::io::Write> TlPacket for IoWriter<W> {
             self.status = self.writer.write_all(data);
         }
     }
-}
-
-/// TL packet type.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum TlTarget {
-    /// Ordinary packet (bytes).
-    Packet,
-    /// Hasher packet (to compute TL hash without allocations).
-    Hasher,
 }
 
 /// TL result wrapper.
