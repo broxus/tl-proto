@@ -10,8 +10,8 @@ macro_rules! impl_traits_for_tuple {
             type Repr = Bare;
 
             #[inline(always)]
-            fn read_from(packet: &'a [u8], offset: &mut usize) -> TlResult<Self> {
-                Ok(($(ok!($ty::read_from(packet, offset))),*,))
+            fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
+                Ok(($(ok!($ty::read_from(packet))),*,))
             }
         }
 
