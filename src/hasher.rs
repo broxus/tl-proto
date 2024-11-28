@@ -71,7 +71,7 @@ where
 
 struct HashWriter<'a>(pub &'a mut dyn Hasher);
 
-impl<'a> TlPacket for HashWriter<'a> {
+impl TlPacket for HashWriter<'_> {
     #[inline(always)]
     fn ignore_signature(&self) -> bool {
         true

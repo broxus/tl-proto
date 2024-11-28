@@ -143,8 +143,8 @@ mod tl_shard {
         shard.write_to(packet);
     }
 
-    pub fn read(packet: &[u8], offset: &mut usize) -> tl_proto::TlResult<u64> {
-        let shard = u64::read_from(packet, offset)?;
+    pub fn read(packet: &mut &[u8]) -> tl_proto::TlResult<u64> {
+        let shard = u64::read_from(packet)?;
         if shard % 10000 == 0 {
             Ok(shard)
         } else {

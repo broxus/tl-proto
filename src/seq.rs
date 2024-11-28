@@ -547,7 +547,7 @@ impl<'a, R: Repr> TlRead<'a> for RawBytes<'a, R> {
 
     fn read_from(packet: &mut &'a [u8]) -> TlResult<Self> {
         let result = *packet;
-        // NOTE: Assign the end of the packet instead of just empty slice to
+        // NOTE: Assign the end of the packet instead of just empty slice
         //       to leave the pointer at the same location.
         *packet = &packet[packet.len()..];
         Ok(Self::new(result))

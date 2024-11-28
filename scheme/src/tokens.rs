@@ -164,7 +164,7 @@ pub struct Constructor<'a> {
     pub output: OutputType<'a>,
 }
 
-impl<'a> Constructor<'a> {
+impl Constructor<'_> {
     pub fn as_normalized(&self) -> String {
         NormalizedConstructor(self).to_string()
     }
