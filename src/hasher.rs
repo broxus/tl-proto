@@ -68,7 +68,7 @@ where
 
 struct HashWriter<'a>(pub &'a mut dyn Hasher);
 
-impl<'a> TlPacket for HashWriter<'a> {
+impl TlPacket for HashWriter<'_> {
     const TARGET: TlTarget = TlTarget::Hasher;
 
     #[inline(always)]

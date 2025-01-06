@@ -730,7 +730,7 @@ fn read_bytes<'a>(packet: &'a [u8], offset: &mut usize) -> TlResult<&'a [u8]> {
 #[inline(always)]
 fn compute_bytes_meta(packet: &[u8], offset: usize) -> TlResult<(usize, usize, usize)> {
     let packet_len = packet.len();
-    if unlikely(packet_len <= offset + 4) {
+    if unlikely(packet_len < offset + 4) {
         return Err(TlError::UnexpectedEof);
     }
 
@@ -750,3 +750,16 @@ fn compute_bytes_meta(packet: &[u8], offset: usize) -> TlResult<(usize, usize, u
 }
 
 const SIZE_MAGIC: u8 = 254;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_small_slice() {
+        assert_eq!(read_bytes(&[0, 0, 0, 0], &mut 0).unwrap(), &[]);
+        assert_eq!(read_bytes(&[1, 123, 0, 0], &mut 0).unwrap(), &[123]);
+        assert_eq!(read_bytes(&[2, 123, 3, 0], &mut 0).unwrap(), &[123, 3]);
+        assert_eq!(read_bytes(&[3, 123, 3, 2], &mut 0).unwrap(), &[123, 3, 2]);
+    }
+}
