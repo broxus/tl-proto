@@ -3,14 +3,14 @@ name = "tl-scheme"
 description = "TL language grammar"
 authors = ["Ivan Kalinin <i.kalinin@dexpa.io>"]
 repository = "https://github.com/broxus/tl-proto"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 include = ["src/**/*.rs", "src/tl.pest", "README.md"]
 license = "MIT"
 
 [dependencies]
 crc = "3"
-pest = "2.7"
+pest = "2.7.15"
 pest_derive = "2.7"
-rustc-hash = "1.1.0"
-thiserror = "1.0"
+rustc-hash = "2.1.0"
+thiserror = "2.0"

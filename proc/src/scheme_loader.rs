@@ -10,10 +10,7 @@ use rustc_hash::FxHashMap;
 use super::internals::{ast, attr, ctxt};
 
 pub fn compute_tl_id(cx: &ctxt::Ctxt, mut id: attr::TlId, scheme: &attr::Scheme) -> Option<u32> {
-    let (scheme, lit) = match load_scheme(cx, scheme) {
-        Some(scheme) => scheme,
-        None => return None,
-    };
+    let (scheme, lit) = load_scheme(cx, scheme)?;
     let scheme = match tl_scheme::Scheme::parse(&scheme) {
         Ok(scheme) => scheme,
         Err(e) => {
