@@ -258,12 +258,34 @@ where
                             (true, _, _) => quote! { 4usize },
                             (false, Some(size_hint), _) => build_size_hint(size_hint),
                             (false, None, Some(with)) => {
+                                let with_flag = field.attrs.flags_bit.is_some();
                                 let field = build_field(field);
-                                quote! { #with::size_hint(&#field) }
+                                if with_flag {
+                                    quote! {
+                                        if let Some(__field) = &#field {
+                                            #with::size_hint(__field)
+                                        } else {
+                                            0usize
+                                        }
+                                    }
+                                } else {
+                                    quote! { #with::size_hint(&#field) }
+                                }
                             }
                             (false, None, None) => {
+                                let with_flag = field.attrs.flags_bit.is_some();
                                 let field = build_field(field);
-                                quote! { #field.max_size_hint() }
+                                if with_flag {
+                                    quote! {
+                                        if let Some(__field) = &#field {
+                                            __field.max_size_hint()
+                                        } else {
+                                            0usize
+                                        }
+                                    }
+                                } else {
+                                    quote! { #field.max_size_hint() }
+                                }
                             }
                         }
                     });
@@ -333,9 +355,25 @@ where
                     quote! { <u32 as _tl_proto::TlWrite>::write_to::<P_>(&(#(#sum)|*), __packet); }
                 } else {
                     let write_to = if let Some(with) = &field.attrs.with {
-                        quote! { #with::write(#field_name, __packet); }
+                        if field.attrs.flags_bit.is_some() {
+                            quote! {
+                                if let Some(__field) = #field_name {
+                                    #with::write(__field, __packet);
+                                }
+                            }
+                        } else {
+                            quote! { #with::write(#field_name, __packet); }
+                        }
                     } else if let Some(write_with) = &field.attrs.write_with {
-                        quote! { #write_with(#field_name, __packet); }
+                        if field.attrs.flags_bit.is_some() {
+                            quote! {
+                                if let Some(__field) = #field_name {
+                                    #write_with(__field, __packet);
+                                }
+                            }
+                        } else {
+                            quote! { #write_with(#field_name, __packet); }
+                        }
                     } else {
                         quote! { _tl_proto::TlWrite::write_to::<P_>(#field_name, __packet); }
                     };
