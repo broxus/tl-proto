@@ -279,7 +279,7 @@ fn build_read_from(ident: TokenStream, style: &ast::Style, fields: &[ast::Field]
             quote! {
                 #(#reads)*
                 Ok(#ident {
-                    #(#members),*,
+                    #(#members,)*
                 })
             }
         }
